@@ -117,6 +117,11 @@ class DataLayer : public BasePrefetchingDataLayer<Dtype> {
   // LEVELDB
   shared_ptr<leveldb::DB> db_;
   shared_ptr<leveldb::Iterator> iter_;
+  // (XGS) LEVELDB_FILE
+  int fd_data_;
+  int num_source_map_;
+  char** source_map_;
+  int cur_source_map_;
   // LMDB
   MDB_env* mdb_env_;
   MDB_dbi mdb_dbi_;

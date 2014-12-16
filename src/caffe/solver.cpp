@@ -11,6 +11,10 @@
 #include "caffe/util/math_functions.hpp"
 #include "caffe/util/upgrade_proto.hpp"
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 namespace caffe {
 
 template <typename Dtype>
@@ -189,6 +193,14 @@ void Solver<Dtype>::Solve(const char* resume_file) {
     Dtype loss = net_->ForwardBackward(bottom_vec);
     if (display) {
       LOG(INFO) << "Iteration " << iter_ << ", loss = " << loss;
+
+      // TEMPORARY CODE TO LOG LOSS OVER TIME
+      int fd = open("loss_train.csv", O_CREAT|O_APPEND|O_WRONLY, 0600);
+      char tmp_str[128];
+      sprintf(tmp_str, "%d,%.8f\n", iter_, loss);
+      write(fd, tmp_str, strlen(tmp_str));
+      close(fd);
+
       const vector<Blob<Dtype>*>& result = net_->output_blobs();
       int score_index = 0;
       for (int j = 0; j < result.size(); ++j) {
@@ -297,6 +309,14 @@ void Solver<Dtype>::Test(const int test_net_id) {
     }
     LOG(INFO) << "    Test net output #" << i << ": " << output_name << " = "
         << mean_score << loss_msg_stream.str();
+
+    // TEMPORARY CODE TO LOG LOSS OVER TIME
+    int fd = open("loss_test.csv", O_CREAT|O_APPEND|O_WRONLY, 0600);
+    char tmp_str[128];
+    sprintf(tmp_str, "%d,%.8f\n", iter_, mean_score);
+    write(fd, tmp_str, strlen(tmp_str));
+    close(fd);
+
   }
   Caffe::set_phase(Caffe::TRAIN);
 }

@@ -26,6 +26,10 @@ message Datum {
   optional int32 label = 5;
   // Optionally, the datum could also hold float data.
   repeated float float_data = 6;
+  // (XGS) When DataParameter.backend is set to LEVELDB_FILE, the following
+  // fields indicate the file and offset where the images are loaded from
+  optional int32 file_idx = 7;
+  optional int64 src_offset = 8;
 }
 
 message FillerParameter {
@@ -344,6 +348,8 @@ message TransformationParameter {
   // Specify if we would like to randomly crop an image.
   optional uint32 crop_size = 3 [default = 0];
   optional string mean_file = 4;
+  // (XGS) Added option for random vertical flipping
+  optional bool mirror_v = 5 [default = false];
 }
 
 // Message that stores parameters used by AccuracyLayer
@@ -406,6 +412,7 @@ message DataParameter {
   enum DB {
     LEVELDB = 0;
     LMDB = 1;
+    LEVELDB_FILE = 2;       // (XGS) Level DB contains pointers to data file
   }
   // Specify the data source.
   optional string source = 1;
@@ -417,6 +424,8 @@ message DataParameter {
   // be larger than the number of keys in the leveldb.
   optional uint32 rand_skip = 7 [default = 0];
   optional DB backend = 8 [default = LEVELDB];
+  // (XGS) Names of the files pointed in the level DB database
+  repeated string source_map = 9;
   // DEPRECATED. See TransformationParameter. For data pre-processing, we can do
   // simple scaling and subtracting the data mean, if provided. Note that the
   // mean subtraction is always carried out before scaling.

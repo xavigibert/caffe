@@ -1,6 +1,10 @@
 #include <leveldb/db.h>
 #include <stdint.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include <string>
 #include <vector>
 
@@ -21,6 +25,12 @@ DataLayer<Dtype>::~DataLayer<Dtype>() {
   switch (this->layer_param_.data_param().backend()) {
   case DataParameter_DB_LEVELDB:
     break;  // do nothing
+  case DataParameter_DB_LEVELDB_FILE:
+    close(fd_data_);
+    for( int i = 0; i < num_source_map_; i++ )
+      delete source_map_[i];
+    delete[] source_map_;
+    break;
   case DataParameter_DB_LMDB:
     mdb_cursor_close(mdb_cursor_);
     mdb_close(mdb_env_, mdb_dbi_);
@@ -38,6 +48,7 @@ void DataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
   // Initialize DB
   switch (this->layer_param_.data_param().backend()) {
   case DataParameter_DB_LEVELDB:
+  case DataParameter_DB_LEVELDB_FILE:
     {
     leveldb::DB* db_temp;
     leveldb::Options options = GetLevelDBOptions();
@@ -51,6 +62,18 @@ void DataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
     db_.reset(db_temp);
     iter_.reset(db_->NewIterator(leveldb::ReadOptions()));
     iter_->SeekToFirst();
+    if( this->layer_param_.data_param().backend() == DataParameter_DB_LEVELDB_FILE )
+    {
+      num_source_map_ = this->layer_param_.data_param().source_map_size();
+      CHECK(num_source_map_ > 0);
+      source_map_ = new char*[num_source_map_];
+      for( int i = 0; i < num_source_map_; i++ )
+        source_map_[i] = strdup(this->layer_param_.data_param().source_map(i).c_str());
+      cur_source_map_ = 0;
+      fd_data_ = open(source_map_[cur_source_map_], O_RDONLY);
+      CHECK(fd_data_ >= 0) << "Failed to open data file "
+                           << source_map_[cur_source_map_] << std::endl;
+    }
     }
     break;
   case DataParameter_DB_LMDB:
@@ -81,6 +104,7 @@ void DataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
     while (skip-- > 0) {
       switch (this->layer_param_.data_param().backend()) {
       case DataParameter_DB_LEVELDB:
+      case DataParameter_DB_LEVELDB_FILE:
         iter_->Next();
         if (!iter_->Valid()) {
           iter_->SeekToFirst();
@@ -102,6 +126,7 @@ void DataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
   Datum datum;
   switch (this->layer_param_.data_param().backend()) {
   case DataParameter_DB_LEVELDB:
+  case DataParameter_DB_LEVELDB_FILE:
     datum.ParseFromString(iter_->value().ToString());
     break;
   case DataParameter_DB_LMDB:
@@ -157,6 +182,7 @@ void DataLayer<Dtype>::InternalThreadEntry() {
     // get a blob
     switch (this->layer_param_.data_param().backend()) {
     case DataParameter_DB_LEVELDB:
+    case DataParameter_DB_LEVELDB_FILE:
       CHECK(iter_);
       CHECK(iter_->Valid());
       datum.ParseFromString(iter_->value().ToString());
@@ -171,6 +197,30 @@ void DataLayer<Dtype>::InternalThreadEntry() {
       LOG(FATAL) << "Unknown database backend";
     }
 
+    if( datum.has_src_offset() )
+    {
+      CHECK_EQ(this->layer_param_.data_param().backend(), DataParameter_DB_LEVELDB_FILE);
+      CHECK(datum.has_file_idx());
+      int image_size = this->datum_channels_ * this->datum_height_ * this->datum_width_;
+      uint8_t* pixels = new uint8_t[image_size];
+      if( datum.file_idx() != this->cur_source_map_ )
+      {
+        close(fd_data_);
+        cur_source_map_ = datum.file_idx();
+        fd_data_ = open(source_map_[cur_source_map_], O_RDONLY);
+        CHECK(fd_data_ >= 0) << "Failed to open data file " 
+                             << source_map_[cur_source_map_] << std::endl;
+      }
+      loff_t pos = lseek64(fd_data_, datum.src_offset(), SEEK_SET);
+      CHECK_EQ(pos, datum.src_offset());
+      ssize_t num_read = read(fd_data_, pixels, image_size);
+      CHECK_EQ(num_read, image_size);
+      datum.set_data(pixels, image_size);
+      delete[] pixels;
+    }
+    else
+      CHECK_NE(this->layer_param_.data_param().backend(), DataParameter_DB_LEVELDB_FILE);
+
     // Apply data transformations (mirror, scale, crop...)
     this->data_transformer_.Transform(item_id, datum, this->mean_, top_data);
 
@@ -181,6 +231,7 @@ void DataLayer<Dtype>::InternalThreadEntry() {
     // go to the next iter
     switch (this->layer_param_.data_param().backend()) {
     case DataParameter_DB_LEVELDB:
+    case DataParameter_DB_LEVELDB_FILE:
       iter_->Next();
       if (!iter_->Valid()) {
         // We have reached the end. Restart from the first.

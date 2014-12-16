@@ -19,6 +19,7 @@ void DataTransformer<Dtype>::Transform(const int batch_item_id,
 
   const int crop_size = param_.crop_size();
   const bool mirror = param_.mirror();
+  const bool mirror_v = param_.mirror_v();
   const Dtype scale = param_.scale();
 
   if (mirror && crop_size == 0) {
@@ -37,13 +38,15 @@ void DataTransformer<Dtype>::Transform(const int batch_item_id,
       h_off = (height - crop_size) / 2;
       w_off = (width - crop_size) / 2;
     }
+    bool do_mirror_v = mirror_v && Rand() % 2;
     if (mirror && Rand() % 2) {
       // Copy mirrored version
       for (int c = 0; c < channels; ++c) {
         for (int h = 0; h < crop_size; ++h) {
+          int h_mod = do_mirror_v ? (crop_size - 1 - h) : h;
           for (int w = 0; w < crop_size; ++w) {
             int data_index = (c * height + h + h_off) * width + w + w_off;
-            int top_index = ((batch_item_id * channels + c) * crop_size + h)
+            int top_index = ((batch_item_id * channels + c) * crop_size + h_mod)
                 * crop_size + (crop_size - 1 - w);
             Dtype datum_element =
                 static_cast<Dtype>(static_cast<uint8_t>(data[data_index]));
@@ -56,8 +59,9 @@ void DataTransformer<Dtype>::Transform(const int batch_item_id,
       // Normal copy
       for (int c = 0; c < channels; ++c) {
         for (int h = 0; h < crop_size; ++h) {
+          int h_mod = do_mirror_v ? (crop_size - 1 - h) : h;
           for (int w = 0; w < crop_size; ++w) {
-            int top_index = ((batch_item_id * channels + c) * crop_size + h)
+            int top_index = ((batch_item_id * channels + c) * crop_size + h_mod)
                 * crop_size + w;
             int data_index = (c * height + h + h_off) * width + w + w_off;
             Dtype datum_element =
