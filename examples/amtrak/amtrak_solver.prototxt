@@ -9,7 +9,7 @@ test_interval: 500
 # The base learning rate, momentum and the weight decay of the network.
 base_lr: 0.02
 momentum: 0.9
-weight_decay: 0.0000
+weight_decay: 0.00005
 # The learning rate policy
 lr_policy: "inv"
 gamma: 0.0001
@@ -20,9 +20,9 @@ power: 0.75
 # Display every 100 iterations
 display: 100
 # The maximum number of iterations
-max_iter: 100000
+max_iter: 500000
 # snapshot intermediate results
-snapshot: 5000
+snapshot: 10000
 snapshot_prefix: "examples/amtrak/net"
 # solver mode: CPU or GPU
 solver_mode: GPU

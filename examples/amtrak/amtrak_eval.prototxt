@@ -1,35 +1,11 @@
-name: "Amtrak"
+name: "Amtrak_Eval"
 layers {
   name: "data"
   type: DATA
   top: "data"
   top: "label"
   data_param {
-    source: "examples/amtrak/amtrak_train_leveldb"
-    source_map: "data/amtrak/split0-images-idx3-ubyte"
-    source_map: "data/amtrak/split1-images-idx3-ubyte"
-    source_map: "data/amtrak/split2-images-idx3-ubyte"
-    source_map: "data/amtrak/split3-images-idx3-ubyte"
-    source_map: "data/amtrak/split4-images-idx3-ubyte"
-    backend: LEVELDB_FILE
-    batch_size: 64
-  }
-  transform_param {
-    scale: 0.00390625
-    mean_file: "examples/amtrak/average_image.binaryproto"
-    crop_size: 75
-    mirror: true
-    mirror_v: true
-  }
-  include: { phase: TRAIN }
-}
-layers {
-  name: "data"
-  type: DATA
-  top: "data"
-  top: "label"
-  data_param {
-    source: "examples/amtrak/amtrak_test_leveldb"
+    source: "examples/amtrak/amtrak_test0c_leveldb"
     source_map: "data/amtrak/split0-images-idx3-ubyte"
     source_map: "data/amtrak/split1-images-idx3-ubyte"
     source_map: "data/amtrak/split2-images-idx3-ubyte"
@@ -44,7 +20,6 @@ layers {
     crop_size: 75
     mirror: false
   }
-  include: { phase: TEST }
 }
 layers {
   name: "conv1"
@@ -187,19 +162,4 @@ layers {
       value: 0
     }
   }
-}
-layers {
-  name: "accuracy"
-  type: ACCURACY
-  bottom: "ip2"
-  bottom: "label"
-  top: "accuracy"
-  include: { phase: TEST }
-}
-layers {
-  name: "loss"
-  type: SOFTMAX_LOSS
-  bottom: "ip2"
-  bottom: "label"
-  top: "loss"
 }
