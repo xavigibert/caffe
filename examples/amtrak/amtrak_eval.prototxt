@@ -31,7 +31,7 @@ layers {
   weight_decay: 1
   weight_decay: 0
   convolution_param {
-    num_output: 32
+    num_output: 48
     kernel_size: 9
     stride: 2
     weight_filler {
@@ -65,7 +65,7 @@ layers {
   weight_decay: 1
   weight_decay: 0
   convolution_param {
-    num_output: 48
+    num_output: 64
     kernel_size: 5
     stride: 1
     weight_filler {
@@ -103,7 +103,7 @@ layers {
   blobs_lr: 1
   blobs_lr: 2
   convolution_param {
-    num_output: 200
+    num_output: 256
     kernel_size: 5
     weight_filler {
       type: "gaussian"
@@ -151,7 +151,7 @@ layers {
   weight_decay: 1
   weight_decay: 0
   convolution_param {
-    num_output: 9
+    num_output: 10
     kernel_size: 1
     weight_filler {
       type: "gaussian"

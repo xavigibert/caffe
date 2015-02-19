@@ -1,7 +1,7 @@
 f = fopen('/scratch0/gitlab/railwayvision/libraries/caffe/blob0.bin');
-im = ones(2+11*4, 2+11*8);
+im = ones(2+11*4, 2+11*12);
 for i = 0:3
-    for j = 0:7
+    for j = 0:11
         im2 = fread(f, [9 9], 'float')';
         im2 = (im2 - mean(im2(:))) / std(im2(:)) + 0.5;
         im2 = im2/3;

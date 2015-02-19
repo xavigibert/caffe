@@ -16,12 +16,11 @@ weight_decay: 0.00005
 #power: 0.75
 lr_policy: "step"
 gamma: 0.5
-stepsize: 20000
+stepsize: 30000
 # Display every 100 iterations
 display: 100
 # The maximum number of iterations
-max_iter: 200000
-#max_iter: 300000
+max_iter: 300000
 # snapshot intermediate results
 snapshot: 10000
 snapshot_prefix: "examples/amtrak/net"

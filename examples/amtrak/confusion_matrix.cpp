@@ -96,7 +96,7 @@ int feature_extraction_pipeline(int argc, char** argv) {
   int num_mini_batches = atoi(argv[++arg_pos]);
 
   // Initialize confusion matrix
-  int num_classes = 9;
+  int num_classes = 10;
   vector<int> conf_matrix(num_classes * num_classes, 0);
 
   LOG(ERROR)<< "Extacting Features";
