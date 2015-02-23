@@ -232,7 +232,7 @@ ifeq ($(LINUX), 1)
 		WARNINGS += -Wno-uninitialized
 	endif
 	# boost::thread is reasonably called boost_thread (compare OS X)
-	LIBRARIES += boost_thread-mt
+	LIBRARIES += boost_thread
 endif
 
 # OS X:
