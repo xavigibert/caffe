@@ -171,7 +171,7 @@ void Solver<Dtype>::Step(int iters) {
   vector<Dtype> losses;
   Dtype smoothed_loss = 0;
 
-  for (; iter_ < stop_iter; ++iter_) {
+  while (iter_ < stop_iter) {
     if (param_.test_interval() && iter_ % param_.test_interval() == 0
         && (iter_ > 0 || param_.test_initialization())) {
       TestAll();
@@ -214,8 +214,12 @@ void Solver<Dtype>::Step(int iters) {
     ComputeUpdateValue();
     net_->Update();
 
+    // Increment the internal iter_ counter -- its value should always indicate
+    // the number of times the weights have been updated.
+    ++iter_;
+
     // Save a snapshot if needed.
-    if (param_.snapshot() && (iter_ + 1) % param_.snapshot() == 0) {
+    if (param_.snapshot() && iter_ % param_.snapshot() == 0) {
       Snapshot();
     }
   }
@@ -339,15 +343,14 @@ void Solver<Dtype>::Snapshot() {
   string model_filename, snapshot_filename;
   const int kBufferSize = 20;
   char iter_str_buffer[kBufferSize];
-  // Add one to iter_ to get the number of iterations that have completed.
-  snprintf(iter_str_buffer, kBufferSize, "_iter_%d", iter_ + 1);
+  snprintf(iter_str_buffer, kBufferSize, "_iter_%d", iter_);
   filename += iter_str_buffer;
   model_filename = filename + ".caffemodel";
   LOG(INFO) << "Snapshotting to " << model_filename;
   WriteProtoToBinaryFile(net_param, model_filename.c_str());
   SolverState state;
   SnapshotSolverState(&state);
-  state.set_iter(iter_ + 1);
+  state.set_iter(iter_);
   state.set_learned_net(model_filename);
   state.set_current_step(current_step_);
   snapshot_filename = filename + ".solverstate";
@@ -361,7 +364,7 @@ void Solver<Dtype>::Restore(const char* state_file) {
   NetParameter net_param;
   ReadProtoFromBinaryFile(state_file, &state);
   if (state.has_learned_net()) {
-    ReadProtoFromBinaryFile(state.learned_net().c_str(), &net_param);
+    ReadNetParamsFromBinaryFileOrDie(state.learned_net().c_str(), &net_param);
     net_->CopyTrainedLayersFrom(net_param);
   }
   iter_ = state.iter();
@@ -432,16 +435,10 @@ void SGDSolver<Dtype>::PreSolve() {
   update_.clear();
   temp_.clear();
   for (int i = 0; i < net_params.size(); ++i) {
-    const Blob<Dtype>* net_param = net_params[i].get();
-    history_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(
-        net_param->num(), net_param->channels(), net_param->height(),
-        net_param->width())));
-    update_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(
-        net_param->num(), net_param->channels(), net_param->height(),
-        net_param->width())));
-    temp_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(
-        net_param->num(), net_param->channels(), net_param->height(),
-        net_param->width())));
+    const vector<int>& shape = net_params[i]->shape();
+    history_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape)));
+    update_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape)));
+    temp_.push_back(shared_ptr<Blob<Dtype> >(new Blob<Dtype>(shape)));
   }
 }
 
