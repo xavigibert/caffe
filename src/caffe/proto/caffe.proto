@@ -250,7 +250,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 131 (last added: python_param)
+// LayerParameter next available layer-specific ID: 132 (last added: part_ext_param)
 message LayerParameter {
   optional string name = 1; // the layer name
   optional string type = 2; // the layer type
@@ -322,6 +322,8 @@ message LayerParameter {
   optional TanHParameter tanh_param = 127;
   optional ThresholdParameter threshold_param = 128;
   optional WindowDataParameter window_data_param = 129;
+  // (XGS) Part extraction layer
+  optional PartExtParameter part_ext_param = 131;
 }
 
 // Message that stores parameters used to apply transformation
@@ -589,6 +591,7 @@ message MVNParameter {
   optional bool across_channels = 2 [default = false];
 }
 
+
 // Message that stores parameters used by PoolingLayer
 message PoolingParameter {
   enum PoolMethod {
@@ -617,6 +620,16 @@ message PoolingParameter {
   // If global_pooling then it will pool over the size of the bottom by doing
   // kernel_h = bottom->height and kernel_w = bottom->width
   optional bool global_pooling = 12 [default = false];
+}
+
+// (XGS) Part extraction layer. Crop a region of the image (part), so we can learn part-specific filters
+message PartExtParameter {
+  // Part extraction is based on a window relative to the image size
+  optional float off_x = 1 [default = 0]; // Relative offset from the left image edge
+  optional float off_y = 2 [default = 0]; // Relative offset from the top image edge
+  optional float crop_w = 3;
+  optional float crop_h = 4;
+  optional bool mirror = 5 [default = false];
 }
 
 // Message that stores parameters used by PowerLayer

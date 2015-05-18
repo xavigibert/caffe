@@ -21,9 +21,9 @@ int main(int argc, char** argv)
   CHECK(ReadProtoFromBinaryFile(param_file, &param))
     << "Failed to parse parameters NetParameter file: " << param_file;
 
-  for( int i = 0; i < param.layers_size(); i++ )
+  for( int i = 0; i < param.layer_size(); i++ )
   {
-    const LayerParameter& layer = param.layers(i);
+    const LayerParameter& layer = param.layer(i);
     if( layer.name() == "conv1" )
     {
       for( int j = 0; j < layer.blobs_size(); j++ )
