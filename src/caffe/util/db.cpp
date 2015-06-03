@@ -62,6 +62,7 @@ void LMDBTransaction::Put(const string& key, const string& value) {
 DB* GetDB(DataParameter::DB backend) {
   switch (backend) {
   case DataParameter_DB_LEVELDB:
+  case DataParameter_DB_LEVELDB_FILE:
     return new LevelDB();
   case DataParameter_DB_LMDB:
     return new LMDB();

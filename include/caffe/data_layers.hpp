@@ -82,7 +82,10 @@ template <typename Dtype>
 class DataLayer : public BasePrefetchingDataLayer<Dtype> {
  public:
   explicit DataLayer(const LayerParameter& param)
-      : BasePrefetchingDataLayer<Dtype>(param) {}
+      : BasePrefetchingDataLayer<Dtype>(param)
+      , num_source_map_(0)
+      , cur_source_map_(-1)
+      , source_map_(NULL) {}
   virtual ~DataLayer();
   virtual void DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);

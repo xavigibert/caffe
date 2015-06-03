@@ -24,9 +24,9 @@ template <typename Dtype>
 DataLayer<Dtype>::~DataLayer<Dtype>() {
   this->JoinPrefetchThread();
   // clean up resources
-  if( this->layer_param_.data_param().backend() == DataParameter_DB_LEVELDB_FILE ) {
+  if (this->layer_param_.data_param().backend() == DataParameter_DB_LEVELDB_FILE ) {
     close(fd_data_);
-    for( int i = 0; i < num_source_map_; i++ )
+    for (int i = 0; i < num_source_map_; ++i)
       delete source_map_[i];
     delete[] source_map_;
   }
@@ -83,6 +83,18 @@ void DataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
     vector<int> label_shape(1, this->layer_param_.data_param().batch_size());
     top[1]->Reshape(label_shape);
     this->prefetch_label_.Reshape(label_shape);
+  }
+  // XGS: Support for DB indexed files
+  if (this->layer_param_.data_param().backend() == DataParameter_DB_LEVELDB_FILE) {
+    num_source_map_ = this->layer_param_.data_param().source_map_size();
+    CHECK(num_source_map_ > 0);
+    source_map_ = new char*[num_source_map_];
+    for (int i = 0; i < num_source_map_; ++i)
+      source_map_[i] = strdup(this->layer_param_.data_param().source_map(i).c_str());
+    cur_source_map_ = 0;
+    fd_data_ = open(source_map_[cur_source_map_], O_RDONLY);
+    CHECK(fd_data_ >= 0) << "Failed to open data file "
+                         << source_map_[cur_source_map_] << std::endl;
   }
 }
 

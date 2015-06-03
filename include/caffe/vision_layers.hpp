@@ -257,6 +257,191 @@ class CuDNNConvolutionLayer : public ConvolutionLayer<Dtype> {
 #endif
 
 /**
+ * @brief Convolves the input image with a bank of learned filters,
+ *        and (optionally) adds biases.
+ *
+ *   Caffe convolves by reduction to matrix multiplication. This achieves
+ *   high-throughput and generality of input and filter dimensions but comes at
+ *   the cost of memory for matrices. This makes use of efficiency in BLAS.
+ *
+ *   The input is "im2col" transformed to a channel K' x H x W data matrix
+ *   for multiplication with the N x K' x H x W filter matrix to yield a
+ *   N' x H x W output matrix that is then "col2im" restored. K' is the
+ *   input channel * kernel height * kernel width dimension of the unrolled
+ *   inputs so that the im2col matrix has a column for each input region to
+ *   be filtered. col2im restores the output spatial structure by rolling up
+ *   the output channel N' columns of the output matrix.
+*/
+template <typename Dtype>
+class DictionaryLayer : public Layer<Dtype> {
+ public:
+  /**
+   * @param param provides ConvolutionParameter convolution_param,
+   *    with ConvolutionLayer options:
+   *  - num_output. The number of atoms.
+   *  - kernel_size / kernel_h / kernel_w. The filter dimensions, given by
+   *  kernel_size for square filters or kernel_h and kernel_w for rectangular
+   *  filters.
+   *  - stride / stride_h / stride_w (\b optional, default 1). The filter
+   *  stride, given by stride_size for equal dimensions or stride_h and stride_w
+   *  for different strides. By default the convolution is dense with stride 1.
+   *  - pad / pad_h / pad_w (\b optional, default 0). The zero-padding for
+   *  convolution, given by pad for equal dimensions or pad_h and pad_w for
+   *  different padding. Input padding is computed implicitly instead of
+   *  actually padding.
+   */
+  explicit DictionaryLayer(const LayerParameter& param)
+    : Layer<Dtype>(param) {}
+  virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+  virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+
+  virtual inline int MinBottomBlobs() const { return 1; }
+  virtual inline int MinTopBlobs() const { return 2; }
+  //virtual inline bool EqualNumBottomTopBlobs() const { return true; }
+
+  virtual inline const char* type() const { return "Dictionary"; }
+  //virtual inline int ExactNumBottomBlobs() const { return 1; }
+  // The dictionary layer has 2 outputs:
+  // - Output 0 corresponds to the sparse codes
+  // - Output 1 corresponds to the objective function (loss)
+  virtual void CheckBlobCounts(const vector<Blob<Dtype>*>& bottom,
+                               const vector<Blob<Dtype>*>& top) {
+    Layer<Dtype>::CheckBlobCounts(bottom, top);
+    // Check that the number of top blobs is twice the number of bottom ones
+    CHECK_EQ(top.size(), 2*bottom.size());
+  }
+
+  //virtual inline int ExactNumTopBlobs() const { return this->bottom.size(); }
+
+ protected:
+  virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
+                           const vector<Blob<Dtype>*>& top);
+  virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
+                           const vector<Blob<Dtype>*>& top);
+  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
+                            const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
+                            const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  virtual void compute_output_shape();
+
+  // Configuration parameters
+  int kernel_h_, kernel_w_;
+  int stride_h_, stride_w_;
+  int num_;
+  int channels_;
+  int pad_h_, pad_w_;
+  int height_, width_;
+  int num_output_;
+  int height_out_, width_out_;
+  bool is_1x1_;
+  float lambda_;
+  int num_iter_cg_;
+  int num_iter_irls_;
+  bool do_learn_dictionary_;
+  float init_rate_;
+  int init_delay_;
+  float soft_th_;
+  int num_blocks_;
+  int initial_block_size_;
+  float block_increase_rate_;
+  int max_block_size_;
+  int max_iter_bcd_;
+  float epsilon_bcd_;
+  int dict_update_interval_;
+  int dict_update_delay_;
+
+ protected:
+  // Perform sparse coding and (optionally) dictionary update
+  double forward_cpu_sparse_coding(const Dtype* input, Dtype* dictionary,
+      Dtype* A, Dtype* B, Dtype* partA, Dtype* partB, Dtype* output,
+      bool skip_im2col = false);
+  void conjugate_gradient_cpu(int k, const Dtype* C, const Dtype* d, Dtype* x,
+      int num_iter, Dtype* temp_p, Dtype* temp_r, Dtype* temp_w);
+  void update_dictionary_cpu(int m, int k, const Dtype* alpha, const Dtype* x,
+      Dtype* D, Dtype* A, Dtype* B, Dtype* partA, Dtype* partB, bool do_update_dict);
+  void normalize_dictionary_cpu(int m, int k, Dtype* D);
+  // Perform B = A^T
+  void transpose_cpu(int m, int k, const Dtype* A, Dtype* B);
+  // Compute objective function
+  double objective_function_cpu(int m, int k, const Dtype* D, const Dtype* x,
+      const Dtype* alpha);
+  // Backpropagation functions
+  void compute_Z_cpu(const Dtype* alpha, const Dtype* D, Dtype* Z);
+  void dict_cpu_backprop(const Dtype* x, const Dtype* alpha,
+      const Dtype* alpha_diff, const Dtype* Z, Dtype* D_diff);
+  void bottom_cpu_backprop(const Dtype* output, const Dtype* Z, Dtype* input);
+
+#ifndef CPU_ONLY
+  void forward_gpu_sparse_coding(const Dtype* input, Dtype* dictionary,
+      Dtype* A, Dtype* B, Dtype* partA, Dtype* partB, Dtype* output, Dtype* loss,
+      bool skip_im2col = false);
+  void conjugate_gradient_gpu(int k, const Dtype* C, const Dtype* d, Dtype* x,
+      int num_iter, Dtype* temp_p, Dtype* temp_r, Dtype* temp_w);
+  void update_dictionary_gpu(int m, int k, const Dtype* alpha, const Dtype* x,
+      Dtype* D, Dtype* A, Dtype* B, Dtype* partA, Dtype* partB, bool do_update_dict);
+  void normalize_dictionary_gpu(int m, int k, Dtype* D);
+  void transpose_gpu(int m, int k, const Dtype* A, Dtype* B);
+  void add_objective_gpu(int m, int k, const Dtype* D, const Dtype* x,
+      const Dtype* alpha, Dtype* loss);
+#endif
+
+ private:
+  // wrap im2col/col2im so we don't have to remember the (long) argument lists
+  inline void conv_im2col_cpu(const Dtype* data, Dtype* col_buff) {
+    im2col_cpu(data, channels_, height_, width_,
+        kernel_h_, kernel_w_, pad_h_, pad_w_, stride_h_, stride_w_, col_buff);
+  }
+  inline void conv_col2im_cpu(const Dtype* col_buff, Dtype* data) {
+    col2im_cpu(col_buff, channels_, height_, width_,
+        kernel_h_, kernel_w_, pad_h_, pad_w_, stride_h_, stride_w_, data);
+  }
+#ifndef CPU_ONLY
+  inline void conv_im2col_gpu(const Dtype* data, Dtype* col_buff) {
+    im2col_gpu(data, channels_, height_, width_,
+        kernel_h_, kernel_w_, pad_h_, pad_w_, stride_h_, stride_w_, col_buff);
+  }
+  inline void conv_col2im_gpu(const Dtype* col_buff, Dtype* data) {
+    col2im_gpu(col_buff, channels_, height_, width_,
+        kernel_h_, kernel_w_, pad_h_, pad_w_, stride_h_, stride_w_, data);
+  }
+#endif
+  void read_counters_from_blob();
+  void save_counters_to_blob();
+
+  int kernel_dim_;
+  int weight_offset_;
+  int col_offset_;
+  int output_offset_;
+  int conv_out_spatial_dim_;
+
+  Blob<Dtype> col_buffer_;
+  Blob<Dtype> vec_d_buffer_;        // D^T * x
+  Blob<Dtype> vec_r_buffer_;        // Residual vector
+  Blob<Dtype> vec_p_buffer_;        // Descent direction
+  Blob<Dtype> vec_w_buffer_;        // Vector w
+  Blob<Dtype> C_buffer_;            // (2*lambda*diag(1/abs(alpha[]))+D^T*D)
+  Blob<Dtype> diagDtD_buffer_;      // diag(D^T*D)
+  Blob<Dtype> Z_buffer_;            // inv(Y+D^T*D)*D^T
+  Blob<Dtype> W_buffer_;
+  Blob<Dtype> sparse_codes_buffer_;
+  Blob<Dtype> tmp_buffer_;
+
+  // Initialization counters
+  // Number of samples to count before we start initializing the dictionary
+  int cnt_init_delay_;
+  // Number of vectors left to fill in the dictionary
+  int cnt_init_vectors_;
+  // Current sample index
+  int sample_idx_;
+  // Current block index for dictionary learning
+  int block_idx_;     // Current block index between 0 and num_blocks
+  int block_size_;    // Current block size (in number of samples)
+  int block_pos_;     // Current sample index within block
+};
+
+/**
  * @brief A helper for image operations that rearranges image regions into
  *        column vectors.  Used by ConvolutionLayer to perform convolution
  *        by matrix multiplication.

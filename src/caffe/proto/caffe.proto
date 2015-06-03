@@ -263,7 +263,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 135 (last added: part_ext_param)
+// LayerParameter next available layer-specific ID: 136 (last added: dictionary_param)
 message LayerParameter {
   optional string name = 1; // the layer name
   optional string type = 2; // the layer type
@@ -344,6 +344,8 @@ message LayerParameter {
   optional WindowDataParameter window_data_param = 129;
   // (XGS) Part extraction layer
   optional PartExtParameter part_ext_param = 134;
+  // (XGS) Dictionary sparse coding layer
+  optional DictionaryParameter dictionary_param = 135;
 }
 
 // Message that stores parameters used to apply transformation
@@ -448,6 +450,53 @@ message ConvolutionParameter {
     CUDNN = 2;
   }
   optional Engine engine = 15 [default = DEFAULT];
+}
+
+message DictionaryParameter {
+  optional uint32 num_output = 1; // The number of outputs (atoms) for the layer
+  // Pad, kernel size, and stride are all given as a single value for equal
+  // dimensions in height and width or as Y, X pairs.
+  optional uint32 pad = 3 [default = 0]; // The padding size (equal in Y, X)
+  optional uint32 pad_h = 9 [default = 0]; // The padding height
+  optional uint32 pad_w = 10 [default = 0]; // The padding width
+  optional uint32 kernel_size = 4; // The kernel size (square)
+  optional uint32 kernel_h = 11; // The kernel height
+  optional uint32 kernel_w = 12; // The kernel width
+  optional uint32 stride = 6 [default = 1]; // The stride (equal in Y, X)
+  optional uint32 stride_h = 13; // The stride height
+  optional uint32 stride_w = 14; // The stride width
+  optional FillerParameter weight_filler = 7; // The filler for the weight
+  // The sparsity regularization parameter in Basis Pursuit Denoising
+  optional float lambda = 15 [default = 1.0];
+  // Number of iterations in (inner) Conjugate Gradient descent step of IRLS
+  optional uint32 num_iter_cg = 16 [default = 4];
+  // Number of iterations in IRLS Basis Pursuit Denoising (BPDN) algorithm
+  optional uint32 num_iter_irls = 17 [default = 8];
+  // Whether or not to enable reconstructive dictionary learning (needs to
+  // be set to true during training)
+  optional bool do_learn_dictionary = 18 [default = true];
+  // Rate at which dictionary gets initialized with data samples (each
+  // sample is selected with a given probability)
+  optional float init_rate = 19 [default = 1.0];
+  // Delay (in samples before dictionary is initialized with training samples)
+  optional uint32 init_delay = 20 [default = 0];
+  // Soft threshold for sparse coefficients
+  optional float soft_th = 21 [default = 0.0];
+  // Number of blocks (partitions) for keeping A and B matrices for
+  // dictionary learning
+  optional uint32 num_blocks = 22 [default = 3];
+  // Initial block size for keeping A and B matrices
+  optional uint32 initial_block_size = 23 [default = 10];
+  // Block size increase rate (each block will be alpha times bigger than the
+  // previous one)
+  optional float block_increase_rate = 24 [default = 1.1];
+  // Maximum block size (ideally, no more than 2 epochs)
+  optional uint32 max_block_size = 25 [default = 2000000];
+  // Convergence criterial for BCD-based dictionary update
+  optional uint32 max_iter_bcd = 26 [default = 1];
+  optional float epsilon_bcd = 27 [default = 0.01];
+  optional uint32 dict_update_interval = 28 [default = 1];
+  optional uint32 dict_update_delay = 29 [default = 0];
 }
 
 message DataParameter {

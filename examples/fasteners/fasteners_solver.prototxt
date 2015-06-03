@@ -1,0 +1,31 @@
+# The train/test net protocol buffer definition
+net: "examples/fasteners/fasteners_train_test.prototxt"
+# test_iter specifies how many forward passes the test should carry out.
+# In the case of fasteners, we have test batch size 100 and 12 test iterations,
+# covering the full 2,200 testing images.
+test_iter: 22
+# Carry out testing every 50 training iterations.
+test_interval: 100
+# The base learning rate, momentum and the weight decay of the network.
+base_lr: 0.01
+momentum: 0.9
+weight_decay: 0.00005
+# The learning rate policy
+#lr_policy: "inv"
+#gamma: 0.0001
+#power: 0.75
+lr_policy: "step"
+gamma: 0.5
+stepsize: 10000
+# Display every 100 iterations
+display: 100
+# The maximum number of iterations
+max_iter: 100000
+# snapshot intermediate results
+snapshot: 10000
+snapshot_prefix: "examples/fasteners/net"
+# solver mode: CPU or GPU
+solver_mode: CPU
+
+# Fix random seed for reproducible results
+random_seed: 1

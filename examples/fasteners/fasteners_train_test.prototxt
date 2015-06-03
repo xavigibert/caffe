@@ -1,0 +1,111 @@
+name: "Fasteners"
+layer {
+  name: "data"
+  type: "Data"
+  top: "data"
+  top: "label"
+  data_param {
+    source: "examples/fasteners/db_train_leveldb"
+    source_map: "data/fasteners/split0-images-idx3-ubyte"
+    source_map: "data/fasteners/split1-images-idx3-ubyte"
+    source_map: "data/fasteners/split2-images-idx3-ubyte"
+    source_map: "data/fasteners/split3-images-idx3-ubyte"
+    source_map: "data/fasteners/split4-images-idx3-ubyte"
+    backend: LEVELDB_FILE
+    batch_size: 2
+  }
+  transform_param {
+    scale: 0.00390625
+    mean_value: 128
+  }
+  include: { phase: TRAIN }
+}
+layer {
+  name: "data"
+  type: "Data"
+  top: "data"
+  top: "label"
+  data_param {
+    source: "examples/fasteners/db_test_leveldb"
+    source_map: "data/fasteners/split0-images-idx3-ubyte"
+    source_map: "data/fasteners/split1-images-idx3-ubyte"
+    source_map: "data/fasteners/split2-images-idx3-ubyte"
+    source_map: "data/fasteners/split3-images-idx3-ubyte"
+    source_map: "data/fasteners/split4-images-idx3-ubyte"
+    backend: LEVELDB_FILE
+    batch_size: 100
+#    batch_size: 1
+  }
+  transform_param {
+    scale: 0.00390625
+    mean_value: 128
+  }
+  include: { phase: TEST }
+}
+layer {
+  name: "dict1"
+  type: "Dictionary"
+  bottom: "data"
+  top: "dict1"
+  top: "dict1_loss"
+  dictionary_param {
+    num_output: 128
+    kernel_size: 80
+    stride: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    lambda: 0.002
+    num_iter_cg: 8
+    num_iter_irls: 8
+    block_increase_rate: 1.5
+    num_blocks: 5
+    initial_block_size: 100
+    max_block_size: 2500
+    max_iter_bcd: 1
+    dict_update_interval: 10
+    dict_update_delay: 1000
+  }
+}
+layer {
+  name: "ip1"
+  type: "Convolution"
+  bottom: "dict1"
+  top: "ip1"
+  param {
+    lr_mult: 1
+    decay_mult: 1
+  }
+  param {
+    lr_mult: 2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 11
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+layer {
+  name: "accuracy"
+  type: "Accuracy"
+  bottom: "ip1"
+  bottom: "label"
+  top: "accuracy"
+  include: { phase: TEST }
+}
+layer {
+  name: "loss"
+  type: "SoftmaxWithLoss"
+  bottom: "ip1"
+  bottom: "label"
+  top: "loss"
+}
