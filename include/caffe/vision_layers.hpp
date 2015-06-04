@@ -317,13 +317,13 @@ class DictionaryLayer : public Layer<Dtype> {
 
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
-                           const vector<Blob<Dtype>*>& top);
+      const vector<Blob<Dtype>*>& top);
   virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
-                           const vector<Blob<Dtype>*>& top);
+      const vector<Blob<Dtype>*>& top);
   virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
-                            const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
-                            const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
   virtual void compute_output_shape();
 
   // Configuration parameters
@@ -351,6 +351,11 @@ class DictionaryLayer : public Layer<Dtype> {
   float epsilon_bcd_;
   int dict_update_interval_;
   int dict_update_delay_;
+  float stat_decay0_;
+  float stat_decay1_;
+  float stat_decay_rate_;
+  float replace_min_counts_;
+  float replace_threshold_;
 
  protected:
   // Perform sparse coding and (optionally) dictionary update
@@ -361,6 +366,8 @@ class DictionaryLayer : public Layer<Dtype> {
       int num_iter, Dtype* temp_p, Dtype* temp_r, Dtype* temp_w);
   void update_dictionary_cpu(int m, int k, const Dtype* alpha, const Dtype* x,
       Dtype* D, Dtype* A, Dtype* B, Dtype* partA, Dtype* partB, bool do_update_dict);
+  void replace_dictionary_atom_cpu(int m, int k, int idx, Dtype* D,
+      const Dtype* x, Dtype* A, Dtype* B, Dtype* counts, Dtype* pseudocounts);
   void normalize_dictionary_cpu(int m, int k, Dtype* D);
   // Perform B = A^T
   void transpose_cpu(int m, int k, const Dtype* A, Dtype* B);

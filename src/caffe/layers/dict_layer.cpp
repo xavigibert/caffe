@@ -110,13 +110,19 @@ void DictionaryLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   this->epsilon_bcd_ = this->layer_param_.dictionary_param().epsilon_bcd();
   this->dict_update_interval_ = this->layer_param_.dictionary_param().dict_update_interval();
   this->dict_update_delay_ = this->layer_param_.dictionary_param().dict_update_delay();
+  this->stat_decay0_ = this->layer_param_.dictionary_param().stat_decay0();
+  this->stat_decay1_ = this->layer_param_.dictionary_param().stat_decay1();
+  this->stat_decay_rate_ = this->layer_param_.dictionary_param().stat_decay_rate();
+  this->replace_min_counts_ = this->layer_param_.dictionary_param().replace_min_counts();
+  this->replace_threshold_ = this->layer_param_.dictionary_param().replace_threshold();
   // Handle the parameters: dictionary (weights) and biases.
   // - blobs_[0] holds the dictionary (mxk)
   // - blobs_[1] holds the matrix A (kxk) (sum (code * code^T))
   // - blobs_[2] holds the matrix B (mxk) (sum ( x * code^T))
   // - blobs_[3] holds partial sums of matrix A (kxk) (sum (code * code^T)) p times
   // - blobs_[4] holds partial sums of matrix B (mxk) (sum ( x * code^T)) p times
-  // - blobs_[5] holds a copy of the sample counters (1x6)
+  // - blobs_[5] holds a copy of the sample counters (1x6) as well as the counts and
+  //             pseudocounts per dictionary atom
   if (this->blobs_.size() > 0) {
     LOG(INFO) << "Skipping parameter initialization";
     read_counters_from_blob();
@@ -140,8 +146,9 @@ void DictionaryLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     this->blobs_[4].reset(new Blob<Dtype>(
         1, this->num_blocks_, this->channels_ * this->kernel_h_ * this->kernel_w_, this->num_output_));
     // Initialize counters to zero
+    int k = num_output_;
     this->blobs_[5].reset(new Blob<Dtype>(
-        1, 1, 1, 6));
+        1, 1, 1, 6+2*k));
     // Inititialize counters
     if (this->phase_ == TRAIN) {
       cnt_init_delay_ = this->init_delay_;
@@ -160,7 +167,13 @@ void DictionaryLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       block_size_ = 0;
       block_pos_ = 0;
     }
+    // Copy counters to blobs_[5] positions 0 to 5
     save_counters_to_blob();
+    // Note: blobs_[5] positions 6 to k+5 are samples pseudo-counts, which are 0
+    // Update position k+6 to 2*k+5 with -1 indicating that such positions have not
+    // been initialized, yet
+    Dtype* atom_cnts = this->blobs_[5]->mutable_cpu_data() + k+6;
+    caffe_set(k, Dtype(-1.), atom_cnts);
   }
   // Propagate gradients to the parameters (as directed by backward pass).
   this->param_propagate_down_.resize(this->blobs_.size(), false);
@@ -267,6 +280,15 @@ void DictionaryLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   // Normalize dictionary (make sure that the norm for each column is <= 1)
   if (this->phase_ == TRAIN && do_learn_dictionary)
     normalize_dictionary_cpu(kernel_dim_, num_output_, dictionary);
+  // Precompute C = C^T * D
+  Dtype* C = C_buffer_.mutable_cpu_data();
+  caffe_cpu_gemm<Dtype>(CblasTrans, CblasNoTrans, k, k, m,
+       (Dtype)1., dictionary, dictionary,
+       (Dtype)0., C);
+  // Save diag of D^T * D
+  Dtype* diagDtD = diagDtD_buffer_.mutable_cpu_data();  // diag(D^T*D)
+  for (int i = 0; i < k; ++i)
+    diagDtD[i] = C[i*k+i];
   // Perform sparse coding (and optionally dictionary learning) on each input vector
   for (int i = 0; i < top.size()/2; ++i) {
     const Dtype* bottom_data = bottom[i]->cpu_data();
@@ -281,6 +303,7 @@ void DictionaryLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
         // Update counters
         ++sample_idx_;
         ++block_pos_;
+        /*
         if (block_pos_>= block_size_) {
           // Handle block swapping
           block_pos_ = 0;
@@ -305,6 +328,7 @@ void DictionaryLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
             block_size_ = max_block_size_;
           LOG(INFO) << "Setting block size to " << block_size_ << " at sample index " << sample_idx_;
         }
+        */
       }
     }
     // Put objective value in second output
@@ -422,14 +446,8 @@ double DictionaryLayer<Dtype>::forward_cpu_sparse_coding(const Dtype* input,
   Dtype* C = C_buffer_.mutable_cpu_data();              // (2*lambda*diag(1/abs(alpha[]))+D^T*D)
   Dtype* diagDtD = diagDtD_buffer_.mutable_cpu_data();  // diag(D^T*D)
   Dtype* sparse_codes = sparse_codes_buffer_.mutable_cpu_data();
-
-  // Precompute C = D^T * D
-  caffe_cpu_gemm<Dtype>(CblasTrans, CblasNoTrans, k, k, m,
-       (Dtype)1., dictionary, dictionary,
-       (Dtype)0., C);
-  // Save diag of D^T * D
-  for (int i = 0; i < k; ++i)
-    diagDtD[i] = C[i*k+i];
+  Dtype* pseudocounts = this->blobs_[5]->mutable_cpu_data() + 6;
+  Dtype* counts = this->blobs_[5]->mutable_cpu_data() + k+6;
 
   // Initialize loss
   double loss = 0.;
@@ -438,7 +456,7 @@ double DictionaryLayer<Dtype>::forward_cpu_sparse_coding(const Dtype* input,
     const Dtype* x = col_buff + i*m;  // Input sample
     Dtype* vec_alpha = sparse_codes + i*k;   // Sparse code vector
     // Initialize sparse code
-    for (int j = 0; j < num_output_; j++)
+    for (int j = 0; j < k; ++j)
       vec_alpha[j] = 1.0;
     // Perform num_iter_irls iterations of iteratively reweighted
     // least squares using the previous result as starting value
@@ -462,16 +480,44 @@ double DictionaryLayer<Dtype>::forward_cpu_sparse_coding(const Dtype* input,
   bool initialized = cnt_init_delay_ == 0 && cnt_init_vectors_ == 0;
   if (this->phase_ == TRAIN && do_learn_dictionary_ && initialized) {
     for (int i = 0; i < conv_out_spatial_dim_; ++i) {
+      // Premultiply A and B by gamma
+      int global_sample_idx = i+sample_idx_*conv_out_spatial_dim_;
+      Dtype gamma = (Dtype)std::min(stat_decay0_ + global_sample_idx*stat_decay_rate_,
+          stat_decay1_);
+      if (gamma < Dtype(1.)) {
+        caffe_scal<Dtype>(this->blobs_[1]->count(), gamma,
+            this->blobs_[1]->mutable_cpu_data());
+        caffe_scal<Dtype>(this->blobs_[2]->count(), gamma,
+            this->blobs_[2]->mutable_cpu_data());
+        caffe_scal<Dtype>(this->blobs_[3]->count(), gamma,
+            this->blobs_[3]->mutable_cpu_data());
+        caffe_scal<Dtype>(this->blobs_[4]->count(), gamma,
+            this->blobs_[4]->mutable_cpu_data());
+        caffe_scal<Dtype>(k, sqrt(gamma), pseudocounts);
+      }
+      // Perform dictionary update
       const Dtype* vec_alpha = sparse_codes + i*num_output_;  // Sparse code
       const Dtype* x = col_buff + i*kernel_dim_;  // Input sample
-      bool do_update_dict = (i+sample_idx_*conv_out_spatial_dim_) % dict_update_interval_== 0
-          && (i+sample_idx_*conv_out_spatial_dim_) >= dict_update_delay_;
+      bool do_update_dict = global_sample_idx % dict_update_interval_== 0
+          && global_sample_idx >= dict_update_delay_;
       update_dictionary_cpu(kernel_dim_, num_output_, vec_alpha, x, dictionary,
                         A, B, partA, partB, do_update_dict);
+      // Update counts, pseudocounts and replace dictionary atoms, if necessary
+      Dtype norm_alpha = Dtype(0.);
+      for (int j = 0; j < k; ++j) {
+        if (fabs(vec_alpha[j]) > norm_alpha)
+          norm_alpha = fabs(vec_alpha[j]);
+      }
+      //Dtype norm_alpha = sqrt(caffe_cpu_dot<Dtype>(k, vec_alpha, vec_alpha));
+      for (int j = 0; j < k; ++j) {
+        if (counts[j] >= Dtype(0.))
+          counts[j] += Dtype(1.);
+        pseudocounts[j] += norm_alpha;
+      }
     }
   }
-  // Sparse codes are in pixel-first order, we need to transpose them so they are in
-  // channel-first order
+  // Sparse codes are in pixel-first order, we need to transpose them so they
+  // are in channel-first order
   transpose_cpu(conv_out_spatial_dim_, num_output_, sparse_codes, output);
 
   // Perform dictionary initialization
@@ -488,13 +534,36 @@ double DictionaryLayer<Dtype>::forward_cpu_sparse_coding(const Dtype* input,
         if (val[i] <= init_rate_ && cnt_init_vectors_ > 0) {
           --cnt_init_vectors_;
           //LOG(INFO) << "Initializing atom " << cnt_init_vectors_ << " with vector " << i;
+          // Replace dictionary element and update counts
           const Dtype* x = col_buff + i*m;    // Input sample
-          Dtype* dst = dictionary + cnt_init_vectors_;
-          for (int j = 0; j < m; ++j, dst+=k)
-            *dst = x[j];
+          replace_dictionary_atom_cpu(m, k, cnt_init_vectors_, dictionary, x,
+              A, B, counts, pseudocounts);
         }
       }
     } else {
+      for (int i = 0; i < conv_out_spatial_dim_; ++i)
+      {
+        // Check if some elements need to be replaced
+        int replace_idx = -1;
+        Dtype min_utilization = Dtype(replace_threshold_) / Dtype(k);
+        for (int j = 0 ; j < k; ++j) {
+          if (counts[j] >= replace_min_counts_) {
+            Dtype Ajj = A[j*k+j];
+            Dtype utilization = sqrt(Ajj) / pseudocounts[j];
+            if (utilization < min_utilization) {
+              min_utilization = utilization;
+              replace_idx = j;
+            }
+          }
+        }
+        if (replace_idx >= 0) {
+          // Replace dictionary element and update counts
+          const Dtype* x = col_buff + i*m;    // Input sample
+          replace_dictionary_atom_cpu(m, k, replace_idx, dictionary, x, A, B,
+              counts, pseudocounts);
+          LOG(INFO) << "Replaced dictionary column " << replace_idx;
+        }
+      }
       // TEMPORARY CODE
       //save_to_matlab("mat_D.bin", dictionary, m, k);
       // END TEMPORARY CODE
@@ -502,6 +571,24 @@ double DictionaryLayer<Dtype>::forward_cpu_sparse_coding(const Dtype* input,
   }
 
   return loss/conv_out_spatial_dim_;
+}
+
+// Replace dictionary atom with input sample and reset counters, corresponding
+// row and column in matrix A, and corresponding column in matrix B
+template <typename Dtype>
+void DictionaryLayer<Dtype>::replace_dictionary_atom_cpu(int m, int k, int idx,
+      Dtype* D, const Dtype* x, Dtype* A, Dtype* B, Dtype* counts,
+      Dtype* pseudocounts) {
+  for (int j = 0; j < m; ++j) {
+    D[j*k + idx] = x[j];
+    B[j*k + idx] = Dtype(0.);
+  }
+  for (int j =0; j < k; ++j) {
+    A[j*k + idx] = Dtype(0.);
+    A[idx*k + j] = Dtype(0.);
+  }
+  counts[idx] = Dtype(0.);
+  pseudocounts[idx] = Dtype(0.);
 }
 
 template <typename Dtype>

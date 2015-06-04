@@ -491,12 +491,19 @@ message DictionaryParameter {
   // previous one)
   optional float block_increase_rate = 24 [default = 1.1];
   // Maximum block size (ideally, no more than 2 epochs)
-  optional uint32 max_block_size = 25 [default = 2000000];
+  optional uint32 max_block_size = 25 [default = 0];
   // Convergence criterial for BCD-based dictionary update
   optional uint32 max_iter_bcd = 26 [default = 1];
   optional float epsilon_bcd = 27 [default = 0.01];
   optional uint32 dict_update_interval = 28 [default = 1];
   optional uint32 dict_update_delay = 29 [default = 0];
+  // Decay rate for updating statistics matrices A and B
+  optional float stat_decay0 = 30 [default = 0.0];
+  optional float stat_decay1 = 31 [default = 0.9999];
+  optional float stat_decay_rate = 32 [default = 0.001];
+  // Thresholds for replacing atoms in dictionary
+  optional float replace_min_counts = 33 [default = 100];
+  optional float replace_threshold = 34 [default = 0.1];
 }
 
 message DataParameter {

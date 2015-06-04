@@ -48,6 +48,10 @@ layer {
   bottom: "data"
   top: "dict1"
   top: "dict1_loss"
+  param {
+    lr_mult: 1
+    decay_mult: 0
+  }
   dictionary_param {
     num_output: 128
     kernel_size: 80
@@ -62,10 +66,12 @@ layer {
     block_increase_rate: 1.5
     num_blocks: 5
     initial_block_size: 100
-    max_block_size: 2500
+    #max_block_size: 2500
     max_iter_bcd: 1
-    dict_update_interval: 10
-    dict_update_delay: 1000
+    dict_update_interval: 20
+    replace_min_counts: 100
+    replace_threshold: 0.1
+    #dict_update_delay: 1000
   }
 }
 layer {
