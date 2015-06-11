@@ -456,6 +456,7 @@ message DictionaryParameter {
   optional uint32 num_output = 1; // The number of outputs (atoms) for the layer
   // Pad, kernel size, and stride are all given as a single value for equal
   // dimensions in height and width or as Y, X pairs.
+  optional bool bias_term = 2 [default = true]; // whether to have bias terms
   optional uint32 pad = 3 [default = 0]; // The padding size (equal in Y, X)
   optional uint32 pad_h = 9 [default = 0]; // The padding height
   optional uint32 pad_w = 10 [default = 0]; // The padding width
@@ -472,44 +473,11 @@ message DictionaryParameter {
   optional uint32 num_iter_cg = 16 [default = 4];
   // Number of iterations in IRLS Basis Pursuit Denoising (BPDN) algorithm
   optional uint32 num_iter_irls = 17 [default = 8];
-  // Whether or not to enable reconstructive dictionary learning (needs to
-  // be set to true during training)
-  optional bool do_learn_dictionary = 18 [default = true];
   // Rate at which dictionary gets initialized with data samples (each
   // sample is selected with a given probability)
-  optional float init_rate = 19 [default = 1.0];
-  // Delay (in samples before dictionary is initialized with training samples)
-  optional uint32 init_delay = 20 [default = 0];
-  // Soft threshold for sparse coefficients
   optional float soft_th = 21 [default = 0.0];
-  // Number of blocks (partitions) for keeping A and B matrices for
-  // dictionary learning
-  optional uint32 num_blocks = 22 [default = 3];
-  // Initial block size for keeping A and B matrices
-  optional uint32 initial_block_size = 23 [default = 10];
-  // Block size increase rate (each block will be alpha times bigger than the
-  // previous one)
-  optional float block_increase_rate = 24 [default = 1.1];
-  // Maximum block size (ideally, no more than 2 epochs)
-  optional uint32 max_block_size = 25 [default = 0];
-  // Convergence criterial for BCD-based dictionary update
-  optional uint32 max_iter_bcd = 26 [default = 1];
-  optional float epsilon_bcd = 27 [default = 0.01];
-  optional uint32 dict_update_interval = 28 [default = 1];
-  optional uint32 dict_update_delay = 29 [default = 0];
-  // Decay rate for updating statistics matrices A and B
-  //optional float stat_decay0 = 30 [default = 0.0];
-  //optional float stat_decay1 = 31 [default = 0.9999];
-  //optional float stat_decay_rate = 32 [default = 0.001];
-  // Matrices A and decay at a rate of 1-1/(k*t)
-  optional float stat_decay_gamma = 30 [default = 1];
-  // Thresholds for replacing atoms in dictionary
-  optional float replace_min_counts = 33 [default = 100];
-  optional float replace_threshold = 34 [default = 0.1];
-  // Reserve a bias output by forcing the dictionary to have a constant column
-  optional bool reserve_bias_output = 35 [default = false];
-  // Skip a number of batches until the previous layers have reached convergence
-  optional uint32 skip_batch_count = 36 [default = 0];
+  // Learning rate for generative dictionary learning
+  optional float etha = 22 [default = 0.0];
 }
 
 message DataParameter {

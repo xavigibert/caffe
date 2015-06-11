@@ -81,59 +81,6 @@ void DictionaryLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
 }
 
 template <typename Dtype>
-void DictionaryLayer<Dtype>::update_dictionary_gpu(int m, int k,
-      const Dtype* alpha, const Dtype* x, Dtype* D,
-      Dtype* A, Dtype* B, Dtype* partA, Dtype* partB, bool do_update_dict) {
-  /*
-  // Update matrix A = A + alpha * alpha^T
-  caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasTrans, k, k, 1,
-       Dtype(1.), alpha, alpha, Dtype(1.), A);
-  // Update matrix B = B + x * alpha^T
-  caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasTrans, m, k, 1,
-       Dtype(1.), x, alpha, Dtype(1.), B);
-  // Update partial sums partA and partB
-  caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasTrans, k, k, 1,
-       Dtype(1.), alpha, alpha, Dtype(1.), partA);
-  caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasTrans, m, k, 1,
-       Dtype(1.), x, alpha, Dtype(1.), partB);
-  if( do_update_dict ) {
-    Dtype* tmp = new Dtype[m];   // jth column of D (unnormalized)
-    Dtype* Aj = new Dtype[k];    // jth column of A
-    double prev_cost = objective_function();
-    double conv_criteria = prev_cost * epsilon_bcd_;
-    // Update dictionary
-    for (int iter = 0; iter < max_iter_bcd_; ++iter) {
-      for (int j = 0; j < k; ++j) {
-        // Update column j
-        Dtype Ajj = A[j*k+j];
-        for (int i = 0; i < m; ++i)
-          tmp[i] = B[i*k+j] + Ajj * D[i*k+j];
-        for (int i = 0; i < k; ++i)
-          Aj[i] = A[i*k+j];
-        // Compute tmp = (b_j-D*a_j)+A_jj*d_j
-        caffe_cpu_gemv<Dtype>(CblasNoTrans, CblasNoTrans, m, k,
-             -Dtype(1.), D, Aj, Dtype(1.), tmp);
-        // Update column j of D
-        // d_j = uj / max(A_jj,norm(uj));
-        caffe_gpu_dot<Dtype>(m, tmp, tmp, norm_tmp);
-        norm_tmp = sqrt(norm_tmp);
-        if (norm_tmp < Ajj)
-          norm_tmp = Ajj;
-        for (int i = 0; i < m; ++i)
-          D[i*k+j] = tmp[i] / norm_tmp;
-      }
-      // Check for convergence criteria
-      double cost = objective_function();
-      LOG(INFO) << "Iter " << iter+1 << ": Objective = " << cost;
-      if (prev_cost - cost < conv_criteria)
-        break;
-      prev_cost = cost;
-    }
-  }
-  */
-}
-
-template <typename Dtype>
 void DictionaryLayer<Dtype>::normalize_dictionary_gpu(int m, int k, Dtype* D) {
   // TEMPORARY CODE
   Dtype* tmp_D = new Dtype[m*k];
@@ -228,52 +175,6 @@ void DictionaryLayer<Dtype>::forward_gpu_sparse_coding(const Dtype* input,
       conjugate_gradient_gpu(k, C, vec_d, vec_alpha, num_iter_cg_, vec_p, vec_r, vec_w);
     }
     add_objective_gpu(m, k, dictionary, x, vec_alpha, loss);
-  }
-
-  // Perform online dictionary update
-  bool initialized = cnt_init_delay_ == 0 && cnt_init_vectors_ == 0;
-  if (this->phase_ == TRAIN && do_learn_dictionary_ && initialized) {
-    for (int i = 0; i < conv_out_spatial_dim_; ++i) {
-      const Dtype* vec_alpha = sparse_codes + i*num_output_;  // Sparse code
-      const Dtype* x = col_buff + i*kernel_dim_;  // Input sample
-      bool do_update_dict = (i+sample_idx_*conv_out_spatial_dim_) % dict_update_interval_== 0
-          && (i+sample_idx_*conv_out_spatial_dim_) >= dict_update_delay_;
-      update_dictionary_gpu(kernel_dim_, num_output_, vec_alpha, x, dictionary,
-                        A, B, partA, partB, do_update_dict);
-    }
-  }
-  // Sparse codes are in pixel-first order, we need to transpose them so they are in
-  // channel-first order
-  transpose_gpu(conv_out_spatial_dim_, num_output_, sparse_codes, output);
-
-  // Perform dictionary initialization
-  if (this->phase_ == TRAIN) {
-    if (cnt_init_delay_ > 0) {
-      // Delay initialization
-      --cnt_init_delay_;
-    } else if (cnt_init_vectors_ > 0) {
-      // Initialize dictionary with input samples
-      vector<float> val(conv_out_spatial_dim_, 0.f);
-      caffe_rng_uniform<float>(conv_out_spatial_dim_, 0.f, 1.f, &val[0]);
-      for (int i = 0; i < conv_out_spatial_dim_; ++i)
-      {
-        if (val[i] <= init_rate_ && cnt_init_vectors_ > 0) {
-          --cnt_init_vectors_;
-          //LOG(INFO) << "Initializing atom " << cnt_init_vectors_ << " with vector " << i;
-          col_buff = col_buffer_.cpu_data();
-          const Dtype* x = col_buff + i*m;    // Input sample
-          Dtype* dst = dictionary + cnt_init_vectors_;
-          for (int j = 0; j < m; ++j, dst+=k) {
-            // NOTE: This is a very inefficient way to do "*dst = x[j];"
-            caffe_gpu_memcpy(1, &x[j], dst);
-          }
-        }
-      }
-    } else {
-      // TEMPORARY CODE
-      //save_to_matlab("mat_D.bin", dictionary, m, k);
-      // END TEMPORARY CODE
-    }
   }
 
   return loss/conv_out_spatial_dim_;

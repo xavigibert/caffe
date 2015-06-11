@@ -335,40 +335,24 @@ class DictionaryLayer : public Layer<Dtype> {
   int height_, width_;
   int num_output_;
   int height_out_, width_out_;
+  bool bias_term_;
   bool is_1x1_;
   float lambda_;
   int num_iter_cg_;
   int num_iter_irls_;
-  bool do_learn_dictionary_;
-  float init_rate_;
-  int init_delay_;
   float soft_th_;
-  int num_blocks_;
-  int initial_block_size_;
-  float block_increase_rate_;
-  int max_block_size_;
-  int max_iter_bcd_;
-  float epsilon_bcd_;
-  int dict_update_interval_;
-  int dict_update_delay_;
-  float stat_decay_gamma_;
-  float replace_min_counts_;
-  float replace_threshold_;
-  bool reserve_bias_output_;
-  int skip_count_;
+  float etha_;
 
  protected:
   // Perform sparse coding and (optionally) dictionary update
   double forward_cpu_sparse_coding(const Dtype* input, Dtype* dictionary,
-      Dtype* A, Dtype* B, Dtype* partA, Dtype* partB, Dtype* output,
-      bool skip_im2col = false);
+      Dtype* output, bool skip_im2col = false);
   void conjugate_gradient_cpu(int k, const Dtype* C, const Dtype* d, Dtype* x,
       int num_iter, Dtype* temp_p, Dtype* temp_r, Dtype* temp_w);
-  void update_dictionary_cpu(int m, int k, const Dtype* alpha, const Dtype* x,
-      Dtype* D, Dtype* A, Dtype* B, Dtype* partA, Dtype* partB, bool do_update_dict);
   void replace_dictionary_atom_cpu(int m, int k, int idx, Dtype* D,
       const Dtype* x, Dtype* A, Dtype* B, Dtype* counts, Dtype* pseudocounts,
       bool debias);
+  void forward_cpu_bias(Dtype* output, const Dtype* bias);
   //void normalize_dictionary_cpu(int m, int k, Dtype* D);
   //void orthonormalize_dictionary_cpu(int m, int k, Dtype* D, int* order);
   void orthogonalize_dictionary_cpu(int m, int k, Dtype* D, int* order);
@@ -381,8 +365,11 @@ class DictionaryLayer : public Layer<Dtype> {
   void dict_cpu_backprop(const Dtype* x, const Dtype* dl_dx,
       const Dtype* mod_alpha_diff, const Dtype* Ddagger, const Dtype* diagDtDinv,
       Dtype* tmp1, Dtype* tmp2, Dtype* D_diff);
+  void dict_cpu_optimize(const Dtype* x, const Dtype* alpha, const Dtype* D,
+      Dtype etha, Dtype* tmp1, Dtype* tmp2, Dtype* D_diff);
   void backward_cpu_gemm(const Dtype* mod_alpha_diff, const Dtype* D,
       Dtype* input);
+  void backward_cpu_bias(Dtype* bias, const Dtype* input);
   void precompute_pseudoinverse_cpu(int m, int k, const Dtype* D, Dtype* DtDinv,
       Dtype* Ddagger);
 
@@ -392,8 +379,6 @@ class DictionaryLayer : public Layer<Dtype> {
       bool skip_im2col = false);
   void conjugate_gradient_gpu(int k, const Dtype* C, const Dtype* d, Dtype* x,
       int num_iter, Dtype* temp_p, Dtype* temp_r, Dtype* temp_w);
-  void update_dictionary_gpu(int m, int k, const Dtype* alpha, const Dtype* x,
-      Dtype* D, Dtype* A, Dtype* B, Dtype* partA, Dtype* partB, bool do_update_dict);
   void normalize_dictionary_gpu(int m, int k, Dtype* D);
   void transpose_gpu(int m, int k, const Dtype* A, Dtype* B);
   void add_objective_gpu(int m, int k, const Dtype* D, const Dtype* x,
@@ -420,8 +405,6 @@ class DictionaryLayer : public Layer<Dtype> {
         kernel_h_, kernel_w_, pad_h_, pad_w_, stride_h_, stride_w_, data);
   }
 #endif
-  void read_counters_from_blob();
-  void save_counters_to_blob();
 
   int kernel_dim_;
   int weight_offset_;
@@ -445,18 +428,6 @@ class DictionaryLayer : public Layer<Dtype> {
                                     // inactive elements to zero
   Blob<Dtype> DtDinv_buffer_;       // diag(inv(D^T*D))
   Blob<Dtype> Ddagger_buffer_;      // Pseudoinverse of D^T
-
-  // Initialization counters
-  // Number of samples to count before we start initializing the dictionary
-  int cnt_init_delay_;
-  // Number of vectors left to fill in the dictionary
-  int cnt_init_vectors_;
-  // Current sample index
-  int sample_idx_;
-  // Current block index for dictionary learning
-  int block_idx_;     // Current block index between 0 and num_blocks
-  int block_size_;    // Current block size (in number of samples)
-  int block_pos_;     // Current sample index within block
 };
 
 /**

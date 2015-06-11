@@ -151,10 +151,12 @@ layer {
   propagate_down: true
   param {
     lr_mult: 1
-    decay_mult: 0
+  }
+  param {
+    lr_mult: 2
   }
   dictionary_param {
-    num_output: 128
+    num_output: 64
     kernel_size: 8
     stride: 1
     weight_filler {
@@ -162,18 +164,9 @@ layer {
       std: 0.01
     }
     lambda: 0.001
+    etha: 0.001
     num_iter_cg: 8
     num_iter_irls: 8
-    block_increase_rate: 1.5
-    num_blocks: 5
-    initial_block_size: 100
-    max_iter_bcd: 1
-    dict_update_interval: 20
-    replace_min_counts: 100
-    replace_threshold: 0.1
-    #stat_decay_gamma: 1
-    #reserve_bias_output: true
-    skip_batch_count: 0
   }
 }
 layer {
