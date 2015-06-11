@@ -379,10 +379,20 @@ class DictionaryLayer : public Layer<Dtype> {
       bool skip_im2col = false);
   void conjugate_gradient_gpu(int k, const Dtype* C, const Dtype* d, Dtype* x,
       int num_iter, Dtype* temp_p, Dtype* temp_r, Dtype* temp_w);
-  void normalize_dictionary_gpu(int m, int k, Dtype* D);
   void transpose_gpu(int m, int k, const Dtype* A, Dtype* B);
   void add_objective_gpu(int m, int k, const Dtype* D, const Dtype* x,
       const Dtype* alpha, Dtype* loss);
+  // Backpropagation functions
+  void dict_gpu_backprop(const Dtype* x, const Dtype* dl_dx,
+      const Dtype* mod_alpha_diff, const Dtype* Ddagger, const Dtype* diagDtDinv,
+      Dtype* tmp1, Dtype* tmp2, Dtype* D_diff);
+  void dict_gpu_optimize(const Dtype* x, const Dtype* alpha, const Dtype* D,
+      Dtype etha, Dtype* tmp1, Dtype* tmp2, Dtype* D_diff);
+  void backward_gpu_gemm(const Dtype* mod_alpha_diff, const Dtype* D,
+      Dtype* input);
+  void backward_gpu_bias(Dtype* bias, const Dtype* input);
+  void precompute_pseudoinverse_gpu(int m, int k, const Dtype* D, Dtype* DtDinv,
+      Dtype* Ddagger);
 #endif
 
  private:

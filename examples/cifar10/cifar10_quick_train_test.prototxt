@@ -156,7 +156,7 @@ layer {
     lr_mult: 2
   }
   dictionary_param {
-    num_output: 64
+    num_output: 128
     kernel_size: 8
     stride: 1
     weight_filler {

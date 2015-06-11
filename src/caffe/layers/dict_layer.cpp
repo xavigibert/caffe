@@ -204,13 +204,11 @@ void DictionaryLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   Dtype* dictionary = this->blobs_[0]->mutable_cpu_data();
   // Normalize dictionary (make sure that the norm for each column is <= 1)
-  //if (this->phase_ == TRAIN && do_learn_dictionary)
-  //  normalize_dictionary_cpu(kernel_dim_, num_output_, dictionary);
-  // Orthonormalize dictionary (make sure that D^T*D=I)
+  // Orthonormalize dictionary (make sure that D^T*D=diag(D^T*D))
   if (this->phase_ == TRAIN)
     orthogonalize_dictionary_cpu(kernel_dim_, num_output_, dictionary, &dict_order_[0]);
   // Perform sparse coding (and optionally dictionary learning) on each input vector
-  for (int i = 0; i < top.size()/2; ++i) {        
+  for (int i = 0; i < top.size()/2; ++i) {
     const Dtype* bottom_data = bottom[i]->cpu_data();
     Dtype* top_data = top[2*i]->mutable_cpu_data();
     double loss = 0.;
@@ -500,14 +498,7 @@ void DictionaryLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
   if (this->param_propagate_down_[0]) {
     caffe_set(this->blobs_[0]->count(), Dtype(0), D_diff);
   }
-  //if (skip_count_ > 0)
-  //  return;
   CHECK_EQ(conv_out_spatial_dim_, 1) << "Convolutional dictionaries not implemented, yet!";
-  //bool initialized = cnt_init_delay_ == 0 && cnt_init_vectors_ == 0;
-  // We do not want to backpropagate gradients until our dictionary is fully
-  // initialized with input samples
-  //if (!initialized)
-  //  return;
   // Temporary storage and precomputed constants
   int m = kernel_dim_;
   int k = num_output_;
@@ -517,7 +508,6 @@ void DictionaryLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
   Dtype* DtDinv = DtDinv_buffer_.mutable_cpu_data();
   Dtype* Ddagger = Ddagger_buffer_.mutable_cpu_data();
   precompute_pseudoinverse_cpu(m, k, D, DtDinv, Ddagger);
-
   for (int idx = 0; idx < top.size()/2; ++idx) {
     const Dtype* top_diff = top[2*idx]->cpu_diff();
     const Dtype* top_data = top[2*idx]->cpu_data();
@@ -534,12 +524,6 @@ void DictionaryLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
       for (int n = 0; n < this->num_; ++n) {
         const Dtype* alpha = top_data + top[idx*2]->offset(n);
         const Dtype* alpha_diff = top_diff + top[idx*2]->offset(n);
-        int cnt_nz_alpha = 0;
-        for (int i = 0; i < k; ++i) {
-          if (alpha[i] != (Dtype)0.)
-            ++cnt_nz_alpha;
-        }
-        //LOG(INFO) << "cnt_nz_alpha = " << cnt_nz_alpha;
         // Precompute modified output gradient
         Dtype* mod_alpha_diff = mod_alpha_diff_buffer_.mutable_cpu_data();
         for (int i = 0; i < k; ++i)
