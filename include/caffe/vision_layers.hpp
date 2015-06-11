@@ -351,11 +351,11 @@ class DictionaryLayer : public Layer<Dtype> {
   float epsilon_bcd_;
   int dict_update_interval_;
   int dict_update_delay_;
-  float stat_decay0_;
-  float stat_decay1_;
-  float stat_decay_rate_;
+  float stat_decay_gamma_;
   float replace_min_counts_;
   float replace_threshold_;
+  bool reserve_bias_output_;
+  int skip_count_;
 
  protected:
   // Perform sparse coding and (optionally) dictionary update
@@ -367,18 +367,24 @@ class DictionaryLayer : public Layer<Dtype> {
   void update_dictionary_cpu(int m, int k, const Dtype* alpha, const Dtype* x,
       Dtype* D, Dtype* A, Dtype* B, Dtype* partA, Dtype* partB, bool do_update_dict);
   void replace_dictionary_atom_cpu(int m, int k, int idx, Dtype* D,
-      const Dtype* x, Dtype* A, Dtype* B, Dtype* counts, Dtype* pseudocounts);
-  void normalize_dictionary_cpu(int m, int k, Dtype* D);
+      const Dtype* x, Dtype* A, Dtype* B, Dtype* counts, Dtype* pseudocounts,
+      bool debias);
+  //void normalize_dictionary_cpu(int m, int k, Dtype* D);
+  //void orthonormalize_dictionary_cpu(int m, int k, Dtype* D, int* order);
+  void orthogonalize_dictionary_cpu(int m, int k, Dtype* D, int* order);
   // Perform B = A^T
   void transpose_cpu(int m, int k, const Dtype* A, Dtype* B);
   // Compute objective function
   double objective_function_cpu(int m, int k, const Dtype* D, const Dtype* x,
       const Dtype* alpha);
   // Backpropagation functions
-  void compute_Z_cpu(const Dtype* alpha, const Dtype* D, Dtype* Z);
-  void dict_cpu_backprop(const Dtype* x, const Dtype* alpha,
-      const Dtype* alpha_diff, const Dtype* Z, Dtype* D_diff);
-  void bottom_cpu_backprop(const Dtype* output, const Dtype* Z, Dtype* input);
+  void dict_cpu_backprop(const Dtype* x, const Dtype* dl_dx,
+      const Dtype* mod_alpha_diff, const Dtype* Ddagger, const Dtype* diagDtDinv,
+      Dtype* tmp1, Dtype* tmp2, Dtype* D_diff);
+  void backward_cpu_gemm(const Dtype* mod_alpha_diff, const Dtype* D,
+      Dtype* input);
+  void precompute_pseudoinverse_cpu(int m, int k, const Dtype* D, Dtype* DtDinv,
+      Dtype* Ddagger);
 
 #ifndef CPU_ONLY
   void forward_gpu_sparse_coding(const Dtype* input, Dtype* dictionary,
@@ -429,11 +435,16 @@ class DictionaryLayer : public Layer<Dtype> {
   Blob<Dtype> vec_p_buffer_;        // Descent direction
   Blob<Dtype> vec_w_buffer_;        // Vector w
   Blob<Dtype> C_buffer_;            // (2*lambda*diag(1/abs(alpha[]))+D^T*D)
-  Blob<Dtype> diagDtD_buffer_;      // diag(D^T*D)
   Blob<Dtype> Z_buffer_;            // inv(Y+D^T*D)*D^T
   Blob<Dtype> W_buffer_;
   Blob<Dtype> sparse_codes_buffer_;
   Blob<Dtype> tmp_buffer_;
+  vector<int> dict_order_;          // Order of orthonormalization
+
+  Blob<Dtype> mod_alpha_diff_buffer_;      // Gradient of dl/dalpha after setting
+                                    // inactive elements to zero
+  Blob<Dtype> DtDinv_buffer_;       // diag(inv(D^T*D))
+  Blob<Dtype> Ddagger_buffer_;      // Pseudoinverse of D^T
 
   // Initialization counters
   // Number of samples to count before we start initializing the dictionary

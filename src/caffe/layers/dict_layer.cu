@@ -193,7 +193,7 @@ void DictionaryLayer<Dtype>::forward_gpu_sparse_coding(const Dtype* input,
   Dtype* vec_p = vec_p_buffer_.mutable_gpu_data();      // Descent direction
   Dtype* vec_w = vec_w_buffer_.mutable_gpu_data();      // Vector w
   Dtype* C = C_buffer_.mutable_gpu_data();              // (2*lambda*diag(1/abs(alpha[]))+D^T*D)
-  Dtype* diagDtD = diagDtD_buffer_.mutable_gpu_data();  // diag(D^T*D)
+  Dtype* diagDtD = DtDinv_buffer_.mutable_gpu_data();  // diag(D^T*D)
   Dtype* sparse_codes = sparse_codes_buffer_.mutable_gpu_data();
 
   // Precompute C = D^T * D

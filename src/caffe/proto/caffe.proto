@@ -498,12 +498,18 @@ message DictionaryParameter {
   optional uint32 dict_update_interval = 28 [default = 1];
   optional uint32 dict_update_delay = 29 [default = 0];
   // Decay rate for updating statistics matrices A and B
-  optional float stat_decay0 = 30 [default = 0.0];
-  optional float stat_decay1 = 31 [default = 0.9999];
-  optional float stat_decay_rate = 32 [default = 0.001];
+  //optional float stat_decay0 = 30 [default = 0.0];
+  //optional float stat_decay1 = 31 [default = 0.9999];
+  //optional float stat_decay_rate = 32 [default = 0.001];
+  // Matrices A and decay at a rate of 1-1/(k*t)
+  optional float stat_decay_gamma = 30 [default = 1];
   // Thresholds for replacing atoms in dictionary
   optional float replace_min_counts = 33 [default = 100];
   optional float replace_threshold = 34 [default = 0.1];
+  // Reserve a bias output by forcing the dictionary to have a constant column
+  optional bool reserve_bias_output = 35 [default = false];
+  // Skip a number of batches until the previous layers have reached convergence
+  optional uint32 skip_batch_count = 36 [default = 0];
 }
 
 message DataParameter {

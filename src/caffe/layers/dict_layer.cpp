@@ -110,11 +110,11 @@ void DictionaryLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   this->epsilon_bcd_ = this->layer_param_.dictionary_param().epsilon_bcd();
   this->dict_update_interval_ = this->layer_param_.dictionary_param().dict_update_interval();
   this->dict_update_delay_ = this->layer_param_.dictionary_param().dict_update_delay();
-  this->stat_decay0_ = this->layer_param_.dictionary_param().stat_decay0();
-  this->stat_decay1_ = this->layer_param_.dictionary_param().stat_decay1();
-  this->stat_decay_rate_ = this->layer_param_.dictionary_param().stat_decay_rate();
+  this->stat_decay_gamma_ = this->layer_param_.dictionary_param().stat_decay_gamma();
   this->replace_min_counts_ = this->layer_param_.dictionary_param().replace_min_counts();
   this->replace_threshold_ = this->layer_param_.dictionary_param().replace_threshold();
+  this->reserve_bias_output_ = this->layer_param_.dictionary_param().reserve_bias_output();
+  this->skip_count_ = this->layer_param_.dictionary_param().skip_batch_count();
   // Handle the parameters: dictionary (weights) and biases.
   // - blobs_[0] holds the dictionary (mxk)
   // - blobs_[1] holds the matrix A (kxk) (sum (code * code^T))
@@ -146,13 +146,26 @@ void DictionaryLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     this->blobs_[4].reset(new Blob<Dtype>(
         1, this->num_blocks_, this->channels_ * this->kernel_h_ * this->kernel_w_, this->num_output_));
     // Initialize counters to zero
+    int m = channels_ * kernel_h_ * kernel_w_;
     int k = num_output_;
+    LOG(INFO) << "m = " << m << ", k = " << k;
     this->blobs_[5].reset(new Blob<Dtype>(
         1, 1, 1, 6+2*k));
     // Inititialize counters
     if (this->phase_ == TRAIN) {
       cnt_init_delay_ = this->init_delay_;
       cnt_init_vectors_ = this->num_output_;
+      if (reserve_bias_output_) {
+        // Last element will be the bias term
+        --cnt_init_vectors_;
+        vector<Dtype> bias_elem(m, (Dtype)1./sqrt(m));
+        replace_dictionary_atom_cpu(m, k, cnt_init_vectors_,
+            this->blobs_[0]->mutable_cpu_data(), &bias_elem[0],
+            this->blobs_[1]->mutable_cpu_data(),
+            this->blobs_[2]->mutable_cpu_data(),
+            this->blobs_[5]->mutable_cpu_data() + k+6,
+            this->blobs_[5]->mutable_cpu_data() + 6, false);
+      }
       sample_idx_ = 0;
       block_idx_ = 0;
       block_size_ = this->initial_block_size_;
@@ -250,11 +263,17 @@ void DictionaryLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   vec_r_buffer_.Reshape(1, 1, 1, k);       // Residual vector
   vec_p_buffer_.Reshape(1, 1, 1, k);       // Descent direction
   vec_w_buffer_.Reshape(1, 1, 1, k);       // Vector w
-  C_buffer_.Reshape(1, 1, k, k);           // (2*lambda*diag(1/abs(alpha[]))+D^T*D)
-  diagDtD_buffer_.Reshape(1, 1, 1, k);     // diag(D^T*D)
+  C_buffer_.Reshape(1, 1, k, std::max(k,m));
   Z_buffer_.Reshape(1, 1, k, m);           // inv(Y+D^T*D)*D^T
   W_buffer_.Reshape(1, 1, k, m);
-  tmp_buffer_.Reshape(1, 1, 1, 3*std::max(k,m));    // Temporary storage
+  tmp_buffer_.Reshape(1, 1, 1, 4*std::max(k,m));    // Temporary storage
+  mod_alpha_diff_buffer_.Reshape(1, 1, 1, k);
+  DtDinv_buffer_.Reshape(1, 1, 1, k);
+  Ddagger_buffer_.Reshape(1, 1, k, m);
+  // Initialize orthonormalization order of dictionary columns
+  dict_order_.resize(k);
+  for (int i = 0; i < k; ++i)
+    dict_order_[i] = i;
 }
 
 template <typename Dtype>
@@ -268,6 +287,9 @@ void DictionaryLayer<Dtype>::compute_output_shape() {
 template <typename Dtype>
 void DictionaryLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
+  skip_count_ = std::max(0,skip_count_ - 1);
+  if (skip_count_ > 0)
+    return;
   Dtype* dictionary = this->blobs_[0]->mutable_cpu_data();
   Dtype* A = this->blobs_[1]->mutable_cpu_data();
   Dtype* B = this->blobs_[2]->mutable_cpu_data();
@@ -275,11 +297,17 @@ void DictionaryLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   int sizeB = this->blobs_[2]->count();
   Dtype* partA = this->blobs_[3]->mutable_cpu_data() + sizeA * block_idx_;
   Dtype* partB = this->blobs_[4]->mutable_cpu_data() + sizeB * block_idx_;
-  int num_blocks = this->num_blocks_;
+  //int num_blocks = this->num_blocks_;
   bool do_learn_dictionary = this->do_learn_dictionary_;
   // Normalize dictionary (make sure that the norm for each column is <= 1)
-  if (this->phase_ == TRAIN && do_learn_dictionary)
-    normalize_dictionary_cpu(kernel_dim_, num_output_, dictionary);
+  //if (this->phase_ == TRAIN && do_learn_dictionary)
+  //  normalize_dictionary_cpu(kernel_dim_, num_output_, dictionary);
+  // Orthonormalize dictionary (make sure that D^T*D=I)
+  if (this->phase_ == TRAIN)
+    orthogonalize_dictionary_cpu(kernel_dim_, num_output_, dictionary, &dict_order_[0]);
+  /*
+  int m = kernel_dim_;
+  int k = num_output_;
   // Precompute C = C^T * D
   Dtype* C = C_buffer_.mutable_cpu_data();
   caffe_cpu_gemm<Dtype>(CblasTrans, CblasNoTrans, k, k, m,
@@ -289,11 +317,14 @@ void DictionaryLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   Dtype* diagDtD = diagDtD_buffer_.mutable_cpu_data();  // diag(D^T*D)
   for (int i = 0; i < k; ++i)
     diagDtD[i] = C[i*k+i];
+  */
   // Perform sparse coding (and optionally dictionary learning) on each input vector
-  for (int i = 0; i < top.size()/2; ++i) {
+  for (int i = 0; i < top.size()/2; ++i) {        
     const Dtype* bottom_data = bottom[i]->cpu_data();
     Dtype* top_data = top[2*i]->mutable_cpu_data();
     double loss = 0.;
+    //LOG(INFO) << "Input norm = " << sqrt(caffe_cpu_dot<Dtype>(bottom[i]->count(),
+    //    bottom_data, bottom_data)/bottom[i]->count());
     for (int n = 0; n < this->num_; ++n) {
       // Perform forward sparse coding
       loss += this->forward_cpu_sparse_coding(bottom_data + bottom[i]->offset(n), dictionary,
@@ -362,7 +393,8 @@ void DictionaryLayer<Dtype>::update_dictionary_cpu(int m, int k,
     LOG(INFO) << "Iter " << 0 << ": Objective = " << objective_function_cpu(m, k, D, x, alpha);
     // Update dictionary
     for (int iter = 0; iter < max_iter_bcd_; ++iter) {
-      for (int j = 0; j < k; ++j) {
+      int k1 = reserve_bias_output_ ? k-1 : k;
+      for (int j = 0; j < k1; ++j) {
         // Update column j
         Dtype Ajj = A[j*k+j];
         for (int i = 0; i < m; ++i)
@@ -391,25 +423,110 @@ void DictionaryLayer<Dtype>::update_dictionary_cpu(int m, int k,
   }
 }
 
+//template <typename Dtype>
+//void DictionaryLayer<Dtype>::normalize_dictionary_cpu(int m, int k, Dtype* D) {
+//  Dtype* col_sum = tmp_buffer_.mutable_cpu_data();
+//  Dtype* col_sum2 = col_sum + k;
+//  Dtype* col_std = col_sum + 2*k;
+//  Dtype* col_bias = col_sum + 3*k;
+//  caffe_set<Dtype>(k, Dtype(0), col_sum);
+//  caffe_set<Dtype>(k, Dtype(0), col_sum2);
+//  caffe_set<Dtype>(k, Dtype(0), col_std);
+//  caffe_set<Dtype>(k, Dtype(0), col_bias);
+//  for (int row_idx = 0; row_idx < m; ++row_idx) {
+//    Dtype* ptr = &D[k*row_idx];
+//    for (int col_idx = 0; col_idx < k; ++col_idx) {
+//      col_sum[col_idx] += ptr[col_idx];
+//      col_sum2[col_idx] += ptr[col_idx]*ptr[col_idx];
+//    }
+//  }
+//  int k1 = reserve_bias_output_ ? k-1 : k;
+//  for (int j = 0; j < k1; ++j) {
+//    col_bias[j] = reserve_bias_output_ ? col_sum[j]/m : Dtype(0);
+//    col_std[j] = sqrt(col_sum2[j]/m - col_bias[j]*col_bias[j]);
+//  }
+//  for (int col_idx = 0; col_idx < k1; ++col_idx) {
+//    if (col_std[col_idx] < Dtype(1.))
+//      col_std[col_idx] = Dtype(1.);
+//    else
+//      col_std[col_idx] = sqrt(col_std[col_idx]);
+//  }
+//  for (int row_idx = 0; row_idx < m; ++row_idx) {
+//    Dtype* ptr = &D[k*row_idx];
+//    for (int col_idx = 0; col_idx < k1; ++col_idx)
+//      ptr[col_idx] = (ptr[col_idx] - col_bias[col_idx]) / col_std[col_idx];
+//  }
+//}
+
+//template <typename Dtype>
+//void DictionaryLayer<Dtype>::orthonormalize_dictionary_cpu(int m, int k, Dtype* D, int* order) {
+//  // Orthonormalize in a temporary matrix Z (D transposed and permutted)
+//  Dtype* Z = Z_buffer_.mutable_cpu_data();
+//  for (int i = 0; i < k; ++i) {
+//    int si = order[i];  // Source column si (destination row i)
+//    for (int j = 0; j < m; ++j) {
+//      Z[i*m+j] = D[j*k+si];
+//    }
+//  }
+//  // Apply Gram-Schmidt orthonormalization
+//  for (int i = 0; i < k; ++i) {
+//    // Normalize vector i
+//    Dtype* vi = Z + i*m;
+//    Dtype norm = sqrt(caffe_cpu_dot<Dtype>(m, vi, vi));
+//    caffe_scal(m, Dtype(1.)/norm, vi);
+//    // Remove projection with other vectors
+//    for (int i1 = i+1; i1 < k; ++i1) {
+//      Dtype* vi1 = Z + i1*m;
+//      Dtype proj = caffe_cpu_dot<Dtype>(m, vi, vi1);
+//      caffe_axpy<Dtype>(m, -proj, vi, vi1);
+//    }
+//  }
+//  // Move result back to D
+//  for (int i = 0; i < k; ++i) {
+//    int di = order[i]; // Source row i (destination column di)
+//    for (int j = 0; j < m; ++j) {
+//      D[j*k+di] = Z[i*m+j];
+//    }
+//  }
+//}
+
 template <typename Dtype>
-void DictionaryLayer<Dtype>::normalize_dictionary_cpu(int m, int k, Dtype* D) {
-  Dtype* col_norm = new Dtype[k];
-  caffe_set<Dtype>(k, Dtype(0), col_norm);
-  for (int row_idx = 0; row_idx < m; ++row_idx) {
-    Dtype* ptr = &D[k*row_idx];
-    for (int col_idx = 0; col_idx < k; ++col_idx)
-      col_norm[col_idx] += ptr[col_idx]*ptr[col_idx];
+void DictionaryLayer<Dtype>::orthogonalize_dictionary_cpu(int m, int k, Dtype* D, int* order) {
+  // Orthonormalize in a temporary matrix Z (D transposed and permutted)
+  Dtype* Z = Z_buffer_.mutable_cpu_data();
+  for (int i = 0; i < k; ++i) {
+    int si = order[i];  // Source column si (destination row i)
+    for (int j = 0; j < m; ++j) {
+      Z[i*m+j] = D[j*k+si];
+    }
   }
-  for (int col_idx = 0; col_idx < k; ++col_idx) {
-    if (col_norm[col_idx] < Dtype(1.))
-      col_norm[col_idx] = Dtype(1.);
-    else
-      col_norm[col_idx] = sqrt(col_norm[col_idx]);
+  // We will save the norms in a vector, so we can unnormalize after we finish
+  // orthonormalization
+  Dtype* norm = tmp_buffer_.mutable_cpu_data();
+  // Apply Gram-Schmidt orthonormalization
+  for (int i = 0; i < k; ++i) {
+    // Normalize vector i
+    Dtype* vi = Z + i*m;
+    norm[i] = sqrt(caffe_cpu_dot<Dtype>(m, vi, vi));
+    caffe_scal(m, Dtype(1.)/norm[i], vi);
+    // Remove projection with other vectors
+    for (int i1 = i+1; i1 < k; ++i1) {
+      Dtype* vi1 = Z + i1*m;
+      Dtype proj = caffe_cpu_dot<Dtype>(m, vi, vi1);
+      caffe_axpy<Dtype>(m, -proj, vi, vi1);
+    }
   }
-  for (int row_idx = 0; row_idx < m; ++row_idx) {
-    Dtype* ptr = &D[k*row_idx];
-    for (int col_idx = 0; col_idx < k; ++col_idx)
-      ptr[col_idx] /= col_norm[col_idx];
+  // Unnormalize columns whose norm was originally less than 1
+  for (int i = 0; i < k; ++i) {
+    if (norm[i] < (Dtype)1.)
+      caffe_scal(m, norm[i], Z + i*m);
+  }
+  // Move result back to D
+  for (int i = 0; i < k; ++i) {
+    int di = order[i]; // Source row i (destination column di)
+    for (int j = 0; j < m; ++j) {
+      D[j*k+di] = Z[i*m+j];
+    }
   }
 }
 
@@ -443,12 +560,20 @@ double DictionaryLayer<Dtype>::forward_cpu_sparse_coding(const Dtype* input,
   Dtype* vec_r = vec_r_buffer_.mutable_cpu_data();      // Residual vector
   Dtype* vec_p = vec_p_buffer_.mutable_cpu_data();      // Descent direction
   Dtype* vec_w = vec_w_buffer_.mutable_cpu_data();      // Vector w
-  Dtype* C = C_buffer_.mutable_cpu_data();              // (2*lambda*diag(1/abs(alpha[]))+D^T*D)
-  Dtype* diagDtD = diagDtD_buffer_.mutable_cpu_data();  // diag(D^T*D)
   Dtype* sparse_codes = sparse_codes_buffer_.mutable_cpu_data();
   Dtype* pseudocounts = this->blobs_[5]->mutable_cpu_data() + 6;
   Dtype* counts = this->blobs_[5]->mutable_cpu_data() + k+6;
+  // Precompute C = D^T * D.  NOT NEEDED, WE FORCE D^T * D = I
+  Dtype* C = C_buffer_.mutable_cpu_data();              // (2*lambda*diag(1/abs(alpha[]))+D^T*D)
+  caffe_set<Dtype>(k*k, (Dtype)0., C);
 
+  //caffe_cpu_gemm<Dtype>(CblasTrans, CblasNoTrans, k, k, m,
+  //     (Dtype)1., dictionary, dictionary,
+  //     (Dtype)0., C);
+  // Save diag of D^T * D
+  //Dtype* diagDtD = diagDtD_buffer_.mutable_cpu_data();  // diag(D^T*D)
+  //for (int i = 0; i < k; ++i)
+  //  diagDtD[i] = C[i*k+i];
   // Initialize loss
   double loss = 0.;
   for (int i = 0; i < conv_out_spatial_dim_; ++i)
@@ -464,7 +589,8 @@ double DictionaryLayer<Dtype>::forward_cpu_sparse_coding(const Dtype* input,
     {
       // Build matrix C = diag(2*lambda/fabs(alpha[]) + D^T * D
       for (int j = 0; j < k; ++j)
-        C[j*k+j] = 2*lambda_/(fabs(vec_alpha[j])+EPSILON) + diagDtD[j];
+        //C[j*k+j] = 2*lambda_/(fabs(vec_alpha[j])+EPSILON) + diagDtD[j];
+        C[j*k+j] = 2*lambda_/(fabs(vec_alpha[j])+EPSILON) + (Dtype)1.;
       // Build vector d = D^T * x
       caffe_cpu_gemm<Dtype>(CblasTrans, CblasNoTrans, k, 1, m,
            (Dtype)1., dictionary, x,
@@ -472,6 +598,11 @@ double DictionaryLayer<Dtype>::forward_cpu_sparse_coding(const Dtype* input,
       // Perform conjugate gradient descent to approximately solve
       // C * alpha = d     for alpha
       conjugate_gradient_cpu(k, C, vec_d, vec_alpha, num_iter_cg_, vec_p, vec_r, vec_w);
+    }
+    // Apply hard threshold to sparse codes
+    for (int j = 0; j < k; ++j) {
+      if (fabs(vec_alpha[j]) < lambda_)
+        vec_alpha[j] = (Dtype)0.;
     }
     loss += objective_function_cpu(m, k, dictionary, x, vec_alpha);
   }
@@ -482,8 +613,9 @@ double DictionaryLayer<Dtype>::forward_cpu_sparse_coding(const Dtype* input,
     for (int i = 0; i < conv_out_spatial_dim_; ++i) {
       // Premultiply A and B by gamma
       int global_sample_idx = i+sample_idx_*conv_out_spatial_dim_;
-      Dtype gamma = (Dtype)std::min(stat_decay0_ + global_sample_idx*stat_decay_rate_,
-          stat_decay1_);
+      //Dtype gamma = (Dtype)std::min(stat_decay0_ + global_sample_idx*stat_decay_rate_,
+      //    stat_decay1_);
+      Dtype gamma = 1.0 - 1.0 / (1.0 + global_sample_idx*stat_decay_gamma_ );
       if (gamma < Dtype(1.)) {
         caffe_scal<Dtype>(this->blobs_[1]->count(), gamma,
             this->blobs_[1]->mutable_cpu_data());
@@ -496,10 +628,11 @@ double DictionaryLayer<Dtype>::forward_cpu_sparse_coding(const Dtype* input,
         caffe_scal<Dtype>(k, sqrt(gamma), pseudocounts);
       }
       // Perform dictionary update
-      const Dtype* vec_alpha = sparse_codes + i*num_output_;  // Sparse code
+      Dtype* vec_alpha = sparse_codes + i*num_output_;  // Sparse code
       const Dtype* x = col_buff + i*kernel_dim_;  // Input sample
-      bool do_update_dict = global_sample_idx % dict_update_interval_== 0
-          && global_sample_idx >= dict_update_delay_;
+      //bool do_update_dict = global_sample_idx % dict_update_interval_== 0
+      //    && global_sample_idx >= dict_update_delay_;
+      bool do_update_dict = false;
       update_dictionary_cpu(kernel_dim_, num_output_, vec_alpha, x, dictionary,
                         A, B, partA, partB, do_update_dict);
       // Update counts, pseudocounts and replace dictionary atoms, if necessary
@@ -519,7 +652,7 @@ double DictionaryLayer<Dtype>::forward_cpu_sparse_coding(const Dtype* input,
   // Sparse codes are in pixel-first order, we need to transpose them so they
   // are in channel-first order
   transpose_cpu(conv_out_spatial_dim_, num_output_, sparse_codes, output);
-
+/*
   // Perform dictionary initialization
   if (this->phase_ == TRAIN) {
     if (cnt_init_delay_ > 0) {
@@ -537,7 +670,7 @@ double DictionaryLayer<Dtype>::forward_cpu_sparse_coding(const Dtype* input,
           // Replace dictionary element and update counts
           const Dtype* x = col_buff + i*m;    // Input sample
           replace_dictionary_atom_cpu(m, k, cnt_init_vectors_, dictionary, x,
-              A, B, counts, pseudocounts);
+              A, B, counts, pseudocounts, reserve_bias_output_);
         }
       }
     } else {
@@ -546,7 +679,8 @@ double DictionaryLayer<Dtype>::forward_cpu_sparse_coding(const Dtype* input,
         // Check if some elements need to be replaced
         int replace_idx = -1;
         Dtype min_utilization = Dtype(replace_threshold_) / Dtype(k);
-        for (int j = 0 ; j < k; ++j) {
+        int k1 = reserve_bias_output_ ? k-1 : k;
+        for (int j = 0 ; j < k1; ++j) {
           if (counts[j] >= replace_min_counts_) {
             Dtype Ajj = A[j*k+j];
             Dtype utilization = sqrt(Ajj) / pseudocounts[j];
@@ -560,7 +694,7 @@ double DictionaryLayer<Dtype>::forward_cpu_sparse_coding(const Dtype* input,
           // Replace dictionary element and update counts
           const Dtype* x = col_buff + i*m;    // Input sample
           replace_dictionary_atom_cpu(m, k, replace_idx, dictionary, x, A, B,
-              counts, pseudocounts);
+              counts, pseudocounts, reserve_bias_output_);
           LOG(INFO) << "Replaced dictionary column " << replace_idx;
         }
       }
@@ -569,7 +703,7 @@ double DictionaryLayer<Dtype>::forward_cpu_sparse_coding(const Dtype* input,
       // END TEMPORARY CODE
     }
   }
-
+*/
   return loss/conv_out_spatial_dim_;
 }
 
@@ -578,11 +712,20 @@ double DictionaryLayer<Dtype>::forward_cpu_sparse_coding(const Dtype* input,
 template <typename Dtype>
 void DictionaryLayer<Dtype>::replace_dictionary_atom_cpu(int m, int k, int idx,
       Dtype* D, const Dtype* x, Dtype* A, Dtype* B, Dtype* counts,
-      Dtype* pseudocounts) {
+      Dtype* pseudocounts, bool debias) {
+  // We have observed that when x is very small, the dictionary learning is
+  // unstable. Therefore, we normalize x to unit norm
+  Dtype sum_x = (Dtype)0., sum_x2 = (Dtype)0.;
   for (int j = 0; j < m; ++j) {
-    D[j*k + idx] = x[j];
-    B[j*k + idx] = Dtype(0.);
+    sum_x += x[j];
+    sum_x2 += x[j] * x[j];
   }
+  Dtype bias_x = debias ? sum_x/m : Dtype(0);
+  Dtype std_x = sqrt(sum_x2/m  - bias_x*bias_x);
+  for (int j = 0; j < m; ++j) {
+    D[j*k + idx] = (x[j] - bias_x) / std_x;
+    B[j*k + idx] = Dtype(0.);
+  }  
   for (int j =0; j < k; ++j) {
     A[j*k + idx] = Dtype(0.);
     A[idx*k + j] = Dtype(0.);
@@ -661,26 +804,54 @@ void DictionaryLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
   if (this->param_propagate_down_[0]) {
     caffe_set(this->blobs_[0]->count(), Dtype(0), D_diff);
   }
-  for (int i = 0; i < top.size()/2; ++i) {
-    const Dtype* top_diff = top[2*i]->cpu_diff();
-    const Dtype* top_data = top[2*i]->cpu_data();
-    const Dtype* bottom_data = bottom[i]->cpu_data();
-    Dtype* bottom_diff = bottom[i]->mutable_cpu_diff();
-    if (this->param_propagate_down_[0] || propagate_down[i]) {
+  //if (skip_count_ > 0)
+  //  return;
+  CHECK_EQ(conv_out_spatial_dim_, 1) << "Convolutional dictionaries not implemented, yet!";
+  //bool initialized = cnt_init_delay_ == 0 && cnt_init_vectors_ == 0;
+  // We do not want to backpropagate gradients until our dictionary is fully
+  // initialized with input samples
+  //if (!initialized)
+  //  return;
+  // Temporary storage and precomputed constants
+  int m = kernel_dim_;
+  int k = num_output_;
+  Dtype* tmp1 = tmp_buffer_.mutable_cpu_data();
+  Dtype* tmp2 = tmp_buffer_.mutable_cpu_data() + k;
+  Dtype* tmp_dl_dx = tmp_buffer_.mutable_cpu_data() + 2*k;
+  Dtype* DtDinv = DtDinv_buffer_.mutable_cpu_data();
+  Dtype* Ddagger = Ddagger_buffer_.mutable_cpu_data();
+  precompute_pseudoinverse_cpu(m, k, D, DtDinv, Ddagger);
+
+  for (int idx = 0; idx < top.size()/2; ++idx) {
+    const Dtype* top_diff = top[2*idx]->cpu_diff();
+    const Dtype* top_data = top[2*idx]->cpu_data();
+    const Dtype* bottom_data = bottom[idx]->cpu_data();
+    Dtype* bottom_diff = bottom[idx]->mutable_cpu_diff();
+    if (this->param_propagate_down_[0] || propagate_down[idx]) {
       for (int n = 0; n < this->num_; ++n) {
-        const Dtype* alpha = top_data + top[i*2]->offset(n);
-        const Dtype* alpha_diff = top_diff + top[i*2]->offset(n);
-        // Precompute matrix Z
-        compute_Z_cpu(alpha, D, Z_buffer_.mutable_cpu_data());
+        const Dtype* alpha = top_data + top[idx*2]->offset(n);
+        const Dtype* alpha_diff = top_diff + top[idx*2]->offset(n);
+        int cnt_nz_alpha = 0;
+        for (int i = 0; i < k; ++i) {
+          if (alpha[i] != (Dtype)0.)
+            ++cnt_nz_alpha;
+        }
+        //LOG(INFO) << "cnt_nz_alpha = " << cnt_nz_alpha;
+        // Precompute modified output gradient
+        Dtype* mod_alpha_diff = mod_alpha_diff_buffer_.mutable_cpu_data();
+        for (int i = 0; i < k; ++i)
+          mod_alpha_diff[i] = alpha[i] == (Dtype)0. ? (Dtype)0. : alpha_diff[i];
+        // dl/dx is necessary for both gradients
+        Dtype* dl_dx = propagate_down[idx] ?
+              bottom_diff + bottom[idx]->offset(n) : tmp_dl_dx;
+        // gradient w.r.t. bottom data, if necessary.
+        if (propagate_down[idx] || this->param_propagate_down_[0]) {
+          this->backward_cpu_gemm(mod_alpha_diff, Ddagger, dl_dx);
+        }
         // gradient w.r.t. dictionary. Note that we will accumulate diffs.
         if (this->param_propagate_down_[0]) {
-          this->dict_cpu_backprop(bottom_data + bottom[i]->offset(n),
-              alpha, alpha_diff, Z_buffer_.cpu_data(), D_diff);
-        }
-        // gradient w.r.t. bottom data, if necessary.
-        if (propagate_down[i]) {
-          this->bottom_cpu_backprop(top_diff + top[i]->offset(n),
-              Z_buffer_.cpu_data(), bottom_diff + bottom[i]->offset(n));
+          this->dict_cpu_backprop(bottom_data + bottom[idx]->offset(n),
+              dl_dx, mod_alpha_diff, Ddagger, DtDinv, tmp1, tmp2, D_diff);
         }
       }
     }
@@ -688,62 +859,47 @@ void DictionaryLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
 }
 
 template <typename Dtype>
-void DictionaryLayer<Dtype>::compute_Z_cpu(const Dtype* alpha, const Dtype* D,
-      Dtype* Z) {
+void DictionaryLayer<Dtype>::precompute_pseudoinverse_cpu(int m, int k,
+    const Dtype* D, Dtype* DtDinv, Dtype* Ddagger) {
+  // Precompute diag(inv(D^T*D))
+  for (int i = 0; i < k; ++i)
+    DtDinv[i] = (Dtype)1. / caffe_cpu_strided_dot(m, D+i, k, D+i, k);
+  // Compute transpose of D^dagger by multiplying each row of D with diag(inv(D^T*D))
+  for (int j = 0; j < m; ++j)
+    caffe_mul(k, D+j*k, DtDinv, Ddagger+j*k);
+}
+
+
+template <typename Dtype>
+void DictionaryLayer<Dtype>::dict_cpu_backprop(const Dtype* x, const Dtype* dl_dx,
+    const Dtype* mod_alpha_diff, const Dtype* Dtdagger, const Dtype* diagDtDinv,
+    Dtype* tmp1, Dtype* tmp2, Dtype* D_diff) {
   int m = kernel_dim_;
   int k = num_output_;
-  // Compute matrix Z by approximating inv(Y+D^T*D)*D^T by inv(Y+diag(D^T*D))*D^T
-  // Note that D^T*D has been precomputed in the forward pass and is available
-  // in diagDtD_buffer_
-  const Dtype* diagDtD = diagDtD_buffer_.cpu_data();
-  transpose_cpu(m, k, D, Z);
-  // Compute diagonal of inv(Y+diag(D^T*D)) and scale rows of Z
-  for (int i = 0; i < k; ++i) {
-    Dtype tmp = fabs(alpha[i]) / (2*lambda_ + fabs(alpha[i])*diagDtD[i]);
-    caffe_scal<Dtype>(m, tmp, Z+i*m);
-  }
+  // Compute intermediate products
+  // tmp1 = x^T * (D^dagger)^T
+  caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, 1, k, m, (Dtype)1., x,
+      Dtdagger, (Dtype)0., tmp1);
+  // tmp2 = dl_dx * inv(D^T*D) = dl_dalpha *. diag(inv(D^T*D))
+  caffe_mul(k, mod_alpha_diff, diagDtDinv, tmp2);
+  // Compute gradient of dictionary and add it to D_diff
+  caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, m, k, 1, -(Dtype)2., dl_dx,
+      tmp1, (Dtype)1., D_diff);
+  caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, m, k, 1, (Dtype)1., x,
+      tmp2, (Dtype)1., D_diff);
 }
 
 template <typename Dtype>
-void DictionaryLayer<Dtype>::dict_cpu_backprop(const Dtype* x,
-      const Dtype* alpha, const Dtype* alpha_diff, const Dtype* Z,
-      Dtype* D_diff) {
-  int m = kernel_dim_;
-  int k = num_output_;
-  const Dtype* diagDtD = diagDtD_buffer_.cpu_data();
-  Dtype* W = W_buffer_.mutable_cpu_data();
-  // Compute matrix W
-  caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, k, m, 1,
-       (Dtype)1., alpha_diff, x, (Dtype)0., W);
-  for (int i = 0; i < k; ++i) {
-    Dtype tmp = fabs(alpha[i]) / (2*lambda_ + fabs(alpha[i])*diagDtD[i]);
-    caffe_scal<Dtype>(m, tmp, W+i*m);
-  }
-  // Compute matrix C_diff = alpha * alpha_diff
-  Dtype* C_diff = C_buffer_.mutable_cpu_data();
-  caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, k, k, 1,
-       (Dtype)1., alpha, alpha_diff, (Dtype)0., C_diff);
-  // Add 2*C*Z + W to D_diff
-  caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, k, m, k,
-       (Dtype)2., C_diff, Z, (Dtype)1., D_diff);
-  caffe_add<Dtype>(k*m, W, D_diff, D_diff);
-}
-
-template <typename Dtype>
-void DictionaryLayer<Dtype>::bottom_cpu_backprop(const Dtype* output,
-    const Dtype* Z, Dtype* input) {
+void DictionaryLayer<Dtype>::backward_cpu_gemm(const Dtype* mod_alpha_diff,
+    const Dtype* D, Dtype* input) {
   Dtype* col_buff = col_buffer_.mutable_cpu_data();
   if (is_1x1_) {
     col_buff = input;
   }
-  int m = kernel_dim_;
-  int k = num_output_;
-  for (int i = 0; i < conv_out_spatial_dim_; ++i) {
-    const Dtype* alpha = output + i*k;
-    Dtype* x = col_buff + i*m;    // Input sample
-    caffe_cpu_gemv<Dtype>(CblasNoTrans, k, m, (Dtype)1., Z, alpha,
-        (Dtype)0., x);
-  }
+  caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, kernel_dim_,
+      1, num_output_,
+      (Dtype)1., D, mod_alpha_diff,
+      (Dtype)0., col_buff);
   if (!is_1x1_) {
     conv_col2im_cpu(col_buff, input);
   }

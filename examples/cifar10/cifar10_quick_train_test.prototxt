@@ -143,48 +143,43 @@ layer {
   }
 }
 layer {
-  name: "relu3"
-  type: "ReLU"
+  name: "dict1"
+  type: "Dictionary"
   bottom: "conv3"
-  top: "conv3"
-}
-layer {
-  name: "pool3"
-  type: "Pooling"
-  bottom: "conv3"
-  top: "pool3"
-  pooling_param {
-    pool: AVE
-    kernel_size: 3
-    stride: 2
-  }
-}
-layer {
-  name: "ip1"
-  type: "InnerProduct"
-  bottom: "pool3"
-  top: "ip1"
+  top: "dict1"
+  top: "dict1_loss"
+  propagate_down: true
   param {
     lr_mult: 1
+    decay_mult: 0
   }
-  param {
-    lr_mult: 2
-  }
-  inner_product_param {
-    num_output: 64
+  dictionary_param {
+    num_output: 128
+    kernel_size: 8
+    stride: 1
     weight_filler {
       type: "gaussian"
-      std: 0.1
+      std: 0.01
     }
-    bias_filler {
-      type: "constant"
-    }
+    lambda: 0.001
+    num_iter_cg: 8
+    num_iter_irls: 8
+    block_increase_rate: 1.5
+    num_blocks: 5
+    initial_block_size: 100
+    max_iter_bcd: 1
+    dict_update_interval: 20
+    replace_min_counts: 100
+    replace_threshold: 0.1
+    #stat_decay_gamma: 1
+    #reserve_bias_output: true
+    skip_batch_count: 0
   }
 }
 layer {
   name: "ip2"
   type: "InnerProduct"
-  bottom: "ip1"
+  bottom: "dict1"
   top: "ip2"
   param {
     lr_mult: 1
@@ -219,4 +214,83 @@ layer {
   bottom: "ip2"
   bottom: "label"
   top: "loss"
+}
+layer {
+  name: "relu3_aux"
+  type: "ReLU"
+  bottom: "conv3"
+  top: "relu3_aux"
+}
+layer {
+  name: "pool3_aux"
+  type: "Pooling"
+  bottom: "relu3_aux"
+  top: "pool3_aux"
+  pooling_param {
+    pool: AVE
+    kernel_size: 3
+    stride: 2
+  }
+}
+layer {
+  name: "ip1_aux"
+  type: "InnerProduct"
+  bottom: "pool3_aux"
+  top: "ip1_aux"
+  propagate_down: false
+  param {
+    lr_mult: 1
+  }
+  param {
+    lr_mult: 2
+  }
+  inner_product_param {
+    num_output: 64
+    weight_filler {
+      type: "gaussian"
+      std: 0.1
+    }
+    bias_filler {
+      type: "constant"
+    }
+  }
+}
+layer {
+  name: "ip2_aux"
+  type: "InnerProduct"
+  bottom: "ip1_aux"
+  top: "ip2_aux"
+  param {
+    lr_mult: 1
+  }
+  param {
+    lr_mult: 2
+  }
+  inner_product_param {
+    num_output: 10
+    weight_filler {
+      type: "gaussian"
+      std: 0.1
+    }
+    bias_filler {
+      type: "constant"
+    }
+  }
+}
+layer {
+  name: "accuracy_aux"
+  type: "Accuracy"
+  bottom: "ip2_aux"
+  bottom: "label"
+  top: "accuracy_aux"
+  include {
+    phase: TEST
+  }
+}
+layer {
+  name: "loss_aux"
+  type: "SoftmaxWithLoss"
+  bottom: "ip2_aux"
+  bottom: "label"
+  top: "loss_aux"
 }
