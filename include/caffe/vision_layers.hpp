@@ -375,8 +375,7 @@ class DictionaryLayer : public Layer<Dtype> {
 
 #ifndef CPU_ONLY
   void forward_gpu_sparse_coding(const Dtype* input, Dtype* dictionary,
-      Dtype* A, Dtype* B, Dtype* partA, Dtype* partB, Dtype* output, Dtype* loss,
-      bool skip_im2col = false);
+      Dtype* output, Dtype* loss, bool skip_im2col = false);
   void conjugate_gradient_gpu(int k, const Dtype* C, const Dtype* d, Dtype* x,
       int num_iter, Dtype* temp_p, Dtype* temp_r, Dtype* temp_w);
   void transpose_gpu(int m, int k, const Dtype* A, Dtype* B);
@@ -421,6 +420,7 @@ class DictionaryLayer : public Layer<Dtype> {
   int col_offset_;
   int output_offset_;
   int conv_out_spatial_dim_;
+  bool is_dict_normalized_;
 
   Blob<Dtype> col_buffer_;
   Blob<Dtype> vec_d_buffer_;        // D^T * x
@@ -436,7 +436,7 @@ class DictionaryLayer : public Layer<Dtype> {
 
   Blob<Dtype> mod_alpha_diff_buffer_;      // Gradient of dl/dalpha after setting
                                     // inactive elements to zero
-  Blob<Dtype> DtDinv_buffer_;       // diag(inv(D^T*D))
+  Blob<Dtype> DtD_buffer_;          // diag(inv(D^T*D)) or diag(D^T*D)
   Blob<Dtype> Ddagger_buffer_;      // Pseudoinverse of D^T
 };
 

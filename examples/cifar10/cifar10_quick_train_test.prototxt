@@ -156,14 +156,14 @@ layer {
     lr_mult: 2
   }
   dictionary_param {
-    num_output: 128
+    num_output: 64
     kernel_size: 8
     stride: 1
     weight_filler {
       type: "gaussian"
       std: 0.01
     }
-    lambda: 0.001
+    lambda: 0.002
     etha: 0.001
     num_iter_cg: 8
     num_iter_irls: 8
