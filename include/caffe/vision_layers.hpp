@@ -72,6 +72,7 @@ class BaseConvolutionLayer : public Layer<Dtype> {
   int height_, width_;
   int group_;
   int num_output_;
+  int rank_;
   int height_out_, width_out_;
   bool bias_term_;
   bool is_1x1_;
@@ -342,18 +343,23 @@ class DictionaryLayer : public Layer<Dtype> {
   int num_iter_irls_;
   float soft_th_;
   float etha_;
+  int rank_;
+  bool orthogonalize_;
 
  protected:
   // Perform sparse coding and (optionally) dictionary update
   double forward_cpu_sparse_coding(const Dtype* input, Dtype* dictionary,
       Dtype* output, bool skip_im2col = false);
-  void conjugate_gradient_cpu(int k, const Dtype* C, const Dtype* d, Dtype* x,
-      int num_iter, Dtype* temp_p, Dtype* temp_r, Dtype* temp_w);
+  void conjugate_gradient_cpu(int k, int r, const Dtype* w, const Dtype* Vt,
+      const Dtype* Vt2, const Dtype* d, Dtype* x, int num_iter, Dtype* temp_p,
+      Dtype* temp_r, Dtype* temp_w, Dtype* tmp);
+  void compute_Cx_cpu(int k, int r, const Dtype* w, const Dtype* Vt,
+      const Dtype* Vt2, const Dtype* x, Dtype* tmp, Dtype* Cx);
   void replace_dictionary_atom_cpu(int m, int k, int idx, Dtype* D,
       const Dtype* x, Dtype* A, Dtype* B, Dtype* counts, Dtype* pseudocounts,
       bool debias);
   void forward_cpu_bias(Dtype* output, const Dtype* bias);
-  //void normalize_dictionary_cpu(int m, int k, Dtype* D);
+  void normalize_dictionary_cpu(int m, int k, Dtype* D);
   //void orthonormalize_dictionary_cpu(int m, int k, Dtype* D, int* order);
   void orthogonalize_dictionary_cpu(int m, int k, Dtype* D, int* order);
   // Perform B = A^T
@@ -363,8 +369,8 @@ class DictionaryLayer : public Layer<Dtype> {
       const Dtype* alpha);
   // Backpropagation functions
   void dict_cpu_backprop(const Dtype* x, const Dtype* dl_dx,
-      const Dtype* mod_alpha_diff, const Dtype* Ddagger, const Dtype* diagDtDinv,
-      Dtype* tmp1, Dtype* tmp2, Dtype* D_diff);
+      const Dtype* mod_alpha_diff, const Dtype* Dtdagger, const Dtype* Vt,
+      const Dtype* Vt_sn2, Dtype* tmp1, Dtype* tmp2, Dtype* tmp3, Dtype* D_diff);
   void dict_cpu_optimize(const Dtype* x, const Dtype* alpha, const Dtype* D,
       Dtype etha, Dtype* tmp1, Dtype* tmp2, Dtype* D_diff);
   void backward_cpu_gemm(const Dtype* mod_alpha_diff, const Dtype* D,
@@ -427,7 +433,6 @@ class DictionaryLayer : public Layer<Dtype> {
   Blob<Dtype> vec_r_buffer_;        // Residual vector
   Blob<Dtype> vec_p_buffer_;        // Descent direction
   Blob<Dtype> vec_w_buffer_;        // Vector w
-  Blob<Dtype> C_buffer_;            // (2*lambda*diag(1/abs(alpha[]))+D^T*D)
   Blob<Dtype> Z_buffer_;            // inv(Y+D^T*D)*D^T
   Blob<Dtype> W_buffer_;
   Blob<Dtype> sparse_codes_buffer_;
@@ -436,7 +441,11 @@ class DictionaryLayer : public Layer<Dtype> {
 
   Blob<Dtype> mod_alpha_diff_buffer_;      // Gradient of dl/dalpha after setting
                                     // inactive elements to zero
-  Blob<Dtype> DtD_buffer_;          // diag(inv(D^T*D)) or diag(D^T*D)
+  Blob<Dtype> SV_buffer_;           // r singular values of D
+  Blob<Dtype> U_buffer_;            // First r left singular vectors of D
+  Blob<Dtype> Vt_buffer_;           // First r right singular vectors of D
+  Blob<Dtype> Vt_sn2_buffer_;       // Vt premultiplied by S^(-2)
+  Blob<Dtype> Vt_s2_buffer_;        // Vt premultiplied by S^(2)
   Blob<Dtype> Ddagger_buffer_;      // Pseudoinverse of D^T
 };
 

@@ -23,36 +23,36 @@ __global__ void kernel_norm(int m, int k, const Dtype* D, Dtype* diagDtD) {
 template <typename Dtype>
 void DictionaryLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-  //Forward_cpu(bottom, top);
-  Dtype* dictionary = this->blobs_[0]->mutable_gpu_data();
-  // Normalize dictionary (make sure that the norm for each column is <= 1)
-  // Orthonormalize dictionary (make sure that D^T*D=diag(D^T*D))
-  if (!is_dict_normalized_) {
-    orthogonalize_dictionary_gpu(kernel_dim_, num_output_, dictionary, &dict_order_[0]);
-    is_dict_normalized_ = true;
-  }
-  // Precompute diag(D^T*D)
-  int m = kernel_dim_;
-  int k = num_output_;
-  Dtype* diagDtD = DtD_buffer_.mutable_gpu_data();
-  kernel_norm<<<CAFFE_GET_BLOCKS(k), CAFFE_CUDA_NUM_THREADS>>>(m, k, D, diagDtD);
-  // Perform sparse coding (and optionally dictionary learning) on each input vector
-  for (int i = 0; i < top.size()/2; ++i) {
-    const Dtype* bottom_data = bottom[i]->gpu_data();
-    Dtype* top_data = top[2*i]->mutable_gpu_data();
-    Dtype* loss = top[2*i+1]->mutable_gpu_data();
-    for (int n = 0; n < this->num_; ++n) {
-      // Perform forward sparse coding
-      this->forward_gpu_sparse_coding(bottom_data + bottom[i]->offset(n), dictionary,
-          top_data + top[2*i]->offset(n), loss);
-      if (this->bias_term_) {
-        const Dtype* bias = this->blobs_[1]->gpu_data();
-        this->forward_gpu_bias(top_data + top[i]->offset(n), bias);
-      }
-    }
-    // Scale objective value in second output
-    caffe_gpu_scal(1, (Dtype)1./(Dtype)num_, loss, loss);
-  }
+  Forward_cpu(bottom, top);
+//  Dtype* dictionary = this->blobs_[0]->mutable_gpu_data();
+//  // Normalize dictionary (make sure that the norm for each column is <= 1)
+//  // Orthonormalize dictionary (make sure that D^T*D=diag(D^T*D))
+//  if (!is_dict_normalized_) {
+//    orthogonalize_dictionary_gpu(kernel_dim_, num_output_, dictionary, &dict_order_[0]);
+//    is_dict_normalized_ = true;
+//  }
+//  // Precompute diag(D^T*D)
+//  int m = kernel_dim_;
+//  int k = num_output_;
+//  Dtype* diagDtD = diagDtD_buffer_.mutable_gpu_data();
+//  kernel_norm<<<CAFFE_GET_BLOCKS(k), CAFFE_CUDA_NUM_THREADS>>>(m, k, D, diagDtD);
+//  // Perform sparse coding (and optionally dictionary learning) on each input vector
+//  for (int i = 0; i < top.size()/2; ++i) {
+//    const Dtype* bottom_data = bottom[i]->gpu_data();
+//    Dtype* top_data = top[2*i]->mutable_gpu_data();
+//    Dtype* loss = top[2*i+1]->mutable_gpu_data();
+//    for (int n = 0; n < this->num_; ++n) {
+//      // Perform forward sparse coding
+//      this->forward_gpu_sparse_coding(bottom_data + bottom[i]->offset(n), dictionary,
+//          top_data + top[2*i]->offset(n), loss);
+//      if (this->bias_term_) {
+//        const Dtype* bias = this->blobs_[2]->gpu_data();
+//        this->forward_gpu_bias(top_data + top[i]->offset(n), bias);
+//      }
+//    }
+//    // Scale objective value in second output
+//    caffe_gpu_scal(1, (Dtype)1./(Dtype)num_, loss, loss);
+//  }
 }
 
 // A is mxk, B is kxm
@@ -85,52 +85,48 @@ void DictionaryLayer<Dtype>::forward_gpu_sparse_coding(const Dtype* input,
     }
     col_buff = col_buffer_.gpu_data();
   }
-  // Perform sparse coding for each input vector
-  int m = kernel_dim_;
-  int k = num_output_;
-  Dtype* vec_d = vec_d_buffer_.mutable_gpu_data();      // D^T * x
-  Dtype* vec_r = vec_r_buffer_.mutable_gpu_data();      // Residual vector
-  Dtype* vec_p = vec_p_buffer_.mutable_gpu_data();      // Descent direction
-  Dtype* vec_w = vec_w_buffer_.mutable_gpu_data();      // Vector w
-  const Dtype* diagDtD = DtD_buffer_.gpu_data();
-  Dtype* C = C_buffer_.mutable_gpu_data();              // (2*lambda*diag(1/abs(alpha[]))+D^T*D)
-  Dtype* sparse_codes = sparse_codes_buffer_.mutable_gpu_data();
+//  // Perform sparse coding for each input vector
+//  int m = kernel_dim_;
+//  int k = num_output_;
+//  Dtype* vec_d = vec_d_buffer_.mutable_gpu_data();      // D^T * x
+//  Dtype* vec_r = vec_r_buffer_.mutable_gpu_data();      // Residual vector
+//  Dtype* vec_p = vec_p_buffer_.mutable_gpu_data();      // Descent direction
+//  Dtype* vec_w = vec_w_buffer_.mutable_gpu_data();      // Vector w
+//  Dtype* sparse_codes = sparse_codes_buffer_.mutable_gpu_data();
 
-  // Precompute C = D^T * D
-  caffe_gpu_gemm<Dtype>(CblasTrans, CblasNoTrans, k, k, m,
-       (Dtype)1., dictionary, dictionary,
-       (Dtype)0., C);
-  // Save diag of D^T * D
-  for (int i = 0; i < k; ++i)
-    diagDtD[i] = C[i*k+i];
+//  // Precompute C = D^T * D
+//  caffe_gpu_gemm<Dtype>(CblasTrans, CblasNoTrans, k, k, m,
+//       (Dtype)1., dictionary, dictionary,
+//       (Dtype)0., C);
+//  // Save diag of D^T * D
+//  for (int i = 0; i < k; ++i)
+//    diagDtD[i] = C[i*k+i];
 
-  // Initialize loss
-  for (int i = 0; i < conv_out_spatial_dim_; ++i)
-  {
-    const Dtype* x = col_buff + i*m;  // Input sample
-    Dtype* vec_alpha = sparse_codes + i*k;   // Sparse code vector
-    // Initialize sparse code
-    for (int j = 0; j < num_output_; j++)
-      vec_alpha[j] = 1.0;
-    // Perform num_iter_irls iterations of iteratively reweighted
-    // least squares using the previous result as starting value
-    for (int iter_irls = 0; iter_irls < num_iter_irls_; ++iter_irls)
-    {
-      // Build matrix C = diag(2*lambda/fabs(alpha[]) + D^T * D
-      for (int j = 0; j < k; ++j)
-        C[j*k+j] = 2*lambda_/(fabs(vec_alpha[j])+EPSILON) + diagDtD[j];
-      // Build vector d = D^T * x
-      caffe_gpu_gemm<Dtype>(CblasTrans, CblasNoTrans, k, 1, m,
-           (Dtype)1., dictionary, x,
-           (Dtype)0., vec_d);
-      // Perform conjugate gradient descent to approximately solve
-      // C * alpha = d     for alpha
-      conjugate_gradient_gpu(k, C, vec_d, vec_alpha, num_iter_cg_, vec_p, vec_r, vec_w);
-    }
-    add_objective_gpu(m, k, dictionary, x, vec_alpha, loss);
-  }
-
-  return loss/conv_out_spatial_dim_;
+//  // Initialize loss
+//  for (int i = 0; i < conv_out_spatial_dim_; ++i)
+//  {
+//    const Dtype* x = col_buff + i*m;  // Input sample
+//    Dtype* vec_alpha = sparse_codes + i*k;   // Sparse code vector
+//    // Initialize sparse code
+//    for (int j = 0; j < num_output_; j++)
+//      vec_alpha[j] = 1.0;
+//    // Perform num_iter_irls iterations of iteratively reweighted
+//    // least squares using the previous result as starting value
+//    for (int iter_irls = 0; iter_irls < num_iter_irls_; ++iter_irls)
+//    {
+//      // Build matrix C = diag(2*lambda/fabs(alpha[]) + D^T * D
+//      for (int j = 0; j < k; ++j)
+//        C[j*k+j] = 2*lambda_/(fabs(vec_alpha[j])+EPSILON) + diagDtD[j];
+//      // Build vector d = D^T * x
+//      caffe_gpu_gemm<Dtype>(CblasTrans, CblasNoTrans, k, 1, m,
+//           (Dtype)1., dictionary, x,
+//           (Dtype)0., vec_d);
+//      // Perform conjugate gradient descent to approximately solve
+//      // C * alpha = d     for alpha
+//      conjugate_gradient_gpu(k, C, vec_d, vec_alpha, num_iter_cg_, vec_p, vec_r, vec_w);
+//    }
+//    add_objective_gpu(m, k, dictionary, x, vec_alpha, loss);
+//  }
 }
 
 template <typename Dtype>
@@ -219,60 +215,61 @@ __global__ void kernel_mod_gradient(int k, const Dtype* alpha,
 template <typename Dtype>
 void DictionaryLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
-  const Dtype* D = this->blobs_[0]->gpu_data();
-  Dtype* D_diff = this->blobs_[0]->mutable_gpu_diff();
-  if (this->param_propagate_down_[0]) {
-    caffe_gpu_set(this->blobs_[0]->count(), Dtype(0), D_diff);
-  }
-  CHECK_EQ(conv_out_spatial_dim_, 1) << "Convolutional dictionaries not implemented, yet!";
-  // Temporary storage and precomputed constants
-  int m = kernel_dim_;
-  int k = num_output_;
-  Dtype* tmp1 = tmp_buffer_.mutable_gpu_data();
-  Dtype* tmp2 = tmp_buffer_.mutable_gpu_data() + k;
-  Dtype* tmp_dl_dx = tmp_buffer_.mutable_gpu_data() + 2*k;
-  Dtype* DtDinv = DtD_buffer_.mutable_gpu_data();
-  Dtype* Ddagger = Ddagger_buffer_.mutable_gpu_data();
-  precompute_pseudoinverse_gpu(m, k, D, DtDinv, Ddagger);
-  for (int idx = 0; idx < top.size()/2; ++idx) {
-    const Dtype* top_diff = top[2*idx]->gpu_diff();
-    const Dtype* top_data = top[2*idx]->gpu_data();
-    const Dtype* bottom_data = bottom[idx]->gpu_data();
-    Dtype* bottom_diff = bottom[idx]->mutable_gpu_diff();
-    // Bias gradient, if necessary.
-    if (this->bias_term_ && this->param_propagate_down_[1]) {
-      Dtype* bias_diff = this->blobs_[1]->mutable_gpu_diff();
-      for (int n = 0; n < this->num_; ++n) {
-        this->backward_gpu_bias(bias_diff, top_diff + top[idx*2]->offset(n));
-      }
-    }
-    if (this->param_propagate_down_[0] || propagate_down[idx]) {
-      for (int n = 0; n < this->num_; ++n) {
-        const Dtype* alpha = top_data + top[idx*2]->offset(n);
-        const Dtype* alpha_diff = top_diff + top[idx*2]->offset(n);
-        // Precompute modified output gradient
-        Dtype* mod_alpha_diff = mod_alpha_diff_buffer_.mutable_gpu_data();
-        kernel_mod_gradient<Dtype><<<CAFFE_GET_BLOCKS(k),
-            CAFFE_CUDA_NUM_THREADS>>>(k, alpha, alpha_diff, mod_alpha_diff);
-        // dl/dx is necessary for both gradients
-        Dtype* dl_dx = propagate_down[idx] ?
-              bottom_diff + bottom[idx]->offset(n) : tmp_dl_dx;
-        // gradient w.r.t. bottom data, if necessary.
-        if (propagate_down[idx] || this->param_propagate_down_[0]) {
-          this->backward_gpu_gemm(mod_alpha_diff, Ddagger, dl_dx);
-        }
-        // gradient w.r.t. dictionary. Note that we will accumulate diffs.
-        if (this->param_propagate_down_[0]) {
-          this->dict_gpu_backprop(bottom_data + bottom[idx]->offset(n),
-              dl_dx, mod_alpha_diff, Ddagger, DtDinv, tmp1, tmp2, D_diff);
-          this->dict_gpu_optimize(bottom_data + bottom[idx]->offset(n), alpha,
-              D, (Dtype)etha_, tmp1, tmp2, D_diff);
-          // Mark dictionary as unnormalized
-          is_dict_normalized_ = false;
-        }
-      }
-    }
-  }
+  Backward_cpu(top, propagate_down, bottom);
+//  const Dtype* D = this->blobs_[0]->gpu_data();
+//  Dtype* D_diff = this->blobs_[0]->mutable_gpu_diff();
+//  if (this->param_propagate_down_[0]) {
+//    caffe_gpu_set(this->blobs_[0]->count(), Dtype(0), D_diff);
+//  }
+//  CHECK_EQ(conv_out_spatial_dim_, 1) << "Convolutional dictionaries not implemented, yet!";
+//  // Temporary storage and precomputed constants
+//  int m = kernel_dim_;
+//  int k = num_output_;
+//  Dtype* tmp1 = tmp_buffer_.mutable_gpu_data();
+//  Dtype* tmp2 = tmp_buffer_.mutable_gpu_data() + k;
+//  Dtype* tmp_dl_dx = tmp_buffer_.mutable_gpu_data() + 2*k;
+//  Dtype* DtDinv = diagDtD_buffer_.mutable_gpu_data();
+//  Dtype* Ddagger = Ddagger_buffer_.mutable_gpu_data();
+//  precompute_pseudoinverse_gpu(m, k, D, DtDinv, Ddagger);
+//  for (int idx = 0; idx < top.size()/2; ++idx) {
+//    const Dtype* top_diff = top[2*idx]->gpu_diff();
+//    const Dtype* top_data = top[2*idx]->gpu_data();
+//    const Dtype* bottom_data = bottom[idx]->gpu_data();
+//    Dtype* bottom_diff = bottom[idx]->mutable_gpu_diff();
+//    // Bias gradient, if necessary.
+//    if (this->bias_term_ && this->param_propagate_down_[1]) {
+//      Dtype* bias_diff = this->blobs_[2]->mutable_gpu_diff();
+//      for (int n = 0; n < this->num_; ++n) {
+//        this->backward_gpu_bias(bias_diff, top_diff + top[idx*2]->offset(n));
+//      }
+//    }
+//    if (this->param_propagate_down_[0] || propagate_down[idx]) {
+//      for (int n = 0; n < this->num_; ++n) {
+//        const Dtype* alpha = top_data + top[idx*2]->offset(n);
+//        const Dtype* alpha_diff = top_diff + top[idx*2]->offset(n);
+//        // Precompute modified output gradient
+//        Dtype* mod_alpha_diff = mod_alpha_diff_buffer_.mutable_gpu_data();
+//        kernel_mod_gradient<Dtype><<<CAFFE_GET_BLOCKS(k),
+//            CAFFE_CUDA_NUM_THREADS>>>(k, alpha, alpha_diff, mod_alpha_diff);
+//        // dl/dx is necessary for both gradients
+//        Dtype* dl_dx = propagate_down[idx] ?
+//              bottom_diff + bottom[idx]->offset(n) : tmp_dl_dx;
+//        // gradient w.r.t. bottom data, if necessary.
+//        if (propagate_down[idx] || this->param_propagate_down_[0]) {
+//          this->backward_gpu_gemm(mod_alpha_diff, Ddagger, dl_dx);
+//        }
+//        // gradient w.r.t. dictionary. Note that we will accumulate diffs.
+//        if (this->param_propagate_down_[0]) {
+//          this->dict_gpu_backprop(bottom_data + bottom[idx]->offset(n),
+//              dl_dx, mod_alpha_diff, Ddagger, DtDinv, tmp1, tmp2, D_diff);
+//          this->dict_gpu_optimize(bottom_data + bottom[idx]->offset(n), alpha,
+//              D, (Dtype)etha_, tmp1, tmp2, D_diff);
+//          // Mark dictionary as unnormalized
+//          is_dict_normalized_ = false;
+//        }
+//      }
+//    }
+//  }
 }
 
 template <typename Dtype>

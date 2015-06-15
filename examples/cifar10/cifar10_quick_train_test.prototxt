@@ -150,20 +150,21 @@ layer {
   top: "dict1_loss"
   propagate_down: true
   param {
-    lr_mult: 1
+  lr_mult: 1
   }
   param {
     lr_mult: 2
   }
   dictionary_param {
     num_output: 64
+    rank: 32
     kernel_size: 8
     stride: 1
     weight_filler {
       type: "gaussian"
       std: 0.01
     }
-    lambda: 0.002
+    lambda: 0.01
     etha: 0.001
     num_iter_cg: 8
     num_iter_irls: 8
