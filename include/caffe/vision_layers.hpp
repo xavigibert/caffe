@@ -297,6 +297,7 @@ class DictionaryLayer : public Layer<Dtype> {
       const vector<Blob<Dtype>*>& top);
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
+  virtual void ToProto(LayerParameter* param, bool write_diff = false);
 
   virtual inline int MinBottomBlobs() const { return 1; }
   virtual inline int MinTopBlobs() const { return 2; }
@@ -348,10 +349,12 @@ class DictionaryLayer : public Layer<Dtype> {
 
  protected:
   // Perform sparse coding and (optionally) dictionary update
-  double forward_cpu_sparse_coding(const Dtype* input, Dtype* dictionary,
-      Dtype* output, bool skip_im2col = false);
+  void forward_preprocess_cpu();
+  double forward_cpu_sparse_coding(const Dtype* input, const Dtype* D,
+      const Dtype* Vt, const Dtype *Vt_s2, Dtype* output,
+      bool skip_im2col = false);
   void conjugate_gradient_cpu(int k, int r, const Dtype* w, const Dtype* Vt,
-      const Dtype* Vt2, const Dtype* d, Dtype* x, int num_iter, Dtype* temp_p,
+      const Dtype* Vt_s2, const Dtype* d, Dtype* x, int num_iter, Dtype* temp_p,
       Dtype* temp_r, Dtype* temp_w, Dtype* tmp);
   void compute_Cx_cpu(int k, int r, const Dtype* w, const Dtype* Vt,
       const Dtype* Vt2, const Dtype* x, Dtype* tmp, Dtype* Cx);
@@ -376,8 +379,6 @@ class DictionaryLayer : public Layer<Dtype> {
   void backward_cpu_gemm(const Dtype* mod_alpha_diff, const Dtype* D,
       Dtype* input);
   void backward_cpu_bias(Dtype* bias, const Dtype* input);
-  void precompute_pseudoinverse_cpu(int m, int k, const Dtype* D, Dtype* DtDinv,
-      Dtype* Ddagger);
 
 #ifndef CPU_ONLY
   void forward_gpu_sparse_coding(const Dtype* input, Dtype* dictionary,
@@ -389,15 +390,13 @@ class DictionaryLayer : public Layer<Dtype> {
       const Dtype* alpha, Dtype* loss);
   // Backpropagation functions
   void dict_gpu_backprop(const Dtype* x, const Dtype* dl_dx,
-      const Dtype* mod_alpha_diff, const Dtype* Ddagger, const Dtype* diagDtDinv,
-      Dtype* tmp1, Dtype* tmp2, Dtype* D_diff);
+      const Dtype* mod_alpha_diff, const Dtype* Dtdagger, const Dtype* Vt,
+      const Dtype* Vt_sn2, Dtype* tmp1, Dtype* tmp2, Dtype* tmp3, Dtype* D_diff);
   void dict_gpu_optimize(const Dtype* x, const Dtype* alpha, const Dtype* D,
       Dtype etha, Dtype* tmp1, Dtype* tmp2, Dtype* D_diff);
   void backward_gpu_gemm(const Dtype* mod_alpha_diff, const Dtype* D,
       Dtype* input);
   void backward_gpu_bias(Dtype* bias, const Dtype* input);
-  void precompute_pseudoinverse_gpu(int m, int k, const Dtype* D, Dtype* DtDinv,
-      Dtype* Ddagger);
 #endif
 
  private:
@@ -427,6 +426,7 @@ class DictionaryLayer : public Layer<Dtype> {
   int output_offset_;
   int conv_out_spatial_dim_;
   bool is_dict_normalized_;
+  int bias_idx_;
 
   Blob<Dtype> col_buffer_;
   Blob<Dtype> vec_d_buffer_;        // D^T * x
@@ -443,9 +443,7 @@ class DictionaryLayer : public Layer<Dtype> {
                                     // inactive elements to zero
   Blob<Dtype> SV_buffer_;           // r singular values of D
   Blob<Dtype> U_buffer_;            // First r left singular vectors of D
-  Blob<Dtype> Vt_buffer_;           // First r right singular vectors of D
   Blob<Dtype> Vt_sn2_buffer_;       // Vt premultiplied by S^(-2)
-  Blob<Dtype> Vt_s2_buffer_;        // Vt premultiplied by S^(2)
   Blob<Dtype> Ddagger_buffer_;      // Pseudoinverse of D^T
 };
 

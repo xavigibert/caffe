@@ -46,7 +46,7 @@ void DictionaryLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
 //      this->forward_gpu_sparse_coding(bottom_data + bottom[i]->offset(n), dictionary,
 //          top_data + top[2*i]->offset(n), loss);
 //      if (this->bias_term_) {
-//        const Dtype* bias = this->blobs_[2]->gpu_data();
+//        const Dtype* bias = this->blobs_[bias_idx_]->gpu_data();
 //        this->forward_gpu_bias(top_data + top[i]->offset(n), bias);
 //      }
 //    }
@@ -221,16 +221,19 @@ void DictionaryLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
 //  if (this->param_propagate_down_[0]) {
 //    caffe_gpu_set(this->blobs_[0]->count(), Dtype(0), D_diff);
 //  }
+//  CHECK(is_dict_normalized_);
 //  CHECK_EQ(conv_out_spatial_dim_, 1) << "Convolutional dictionaries not implemented, yet!";
 //  // Temporary storage and precomputed constants
 //  int m = kernel_dim_;
 //  int k = num_output_;
 //  Dtype* tmp1 = tmp_buffer_.mutable_gpu_data();
-//  Dtype* tmp2 = tmp_buffer_.mutable_gpu_data() + k;
-//  Dtype* tmp_dl_dx = tmp_buffer_.mutable_gpu_data() + 2*k;
-//  Dtype* DtDinv = diagDtD_buffer_.mutable_gpu_data();
-//  Dtype* Ddagger = Ddagger_buffer_.mutable_gpu_data();
-//  precompute_pseudoinverse_gpu(m, k, D, DtDinv, Ddagger);
+//  Dtype* tmp2 = tmp_buffer_.mutable_gpu_data() + std::max(k,m);
+//  Dtype* tmp3 = tmp_buffer_.mutable_gpu_data() + 2*std::max(k,m);
+//  Dtype* tmp_dl_dx = tmp_buffer_.mutable_gpu_data() + 3*std::max(k,m);
+//  // Precomputed matrices
+//  const Dtype* Vt = this->blobs_[bias_idx_ + 2]->gpu_data();
+//  const Dtype* Vt_sn2 = Vt_sn2_buffer_.gpu_data();
+//  const Dtype* Ddagger = Ddagger_buffer_.gpu_data();
 //  for (int idx = 0; idx < top.size()/2; ++idx) {
 //    const Dtype* top_diff = top[2*idx]->gpu_diff();
 //    const Dtype* top_data = top[2*idx]->gpu_data();
@@ -238,7 +241,7 @@ void DictionaryLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
 //    Dtype* bottom_diff = bottom[idx]->mutable_gpu_diff();
 //    // Bias gradient, if necessary.
 //    if (this->bias_term_ && this->param_propagate_down_[1]) {
-//      Dtype* bias_diff = this->blobs_[2]->mutable_gpu_diff();
+//      Dtype* bias_diff = this->blobs_[bias_idx_]->mutable_gpu_diff();
 //      for (int n = 0; n < this->num_; ++n) {
 //        this->backward_gpu_bias(bias_diff, top_diff + top[idx*2]->offset(n));
 //      }
@@ -261,11 +264,14 @@ void DictionaryLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
 //        // gradient w.r.t. dictionary. Note that we will accumulate diffs.
 //        if (this->param_propagate_down_[0]) {
 //          this->dict_gpu_backprop(bottom_data + bottom[idx]->offset(n),
-//              dl_dx, mod_alpha_diff, Ddagger, DtDinv, tmp1, tmp2, D_diff);
+//              dl_dx, mod_alpha_diff, Ddagger, Vt, Vt_sn2, tmp1, tmp2, tmp3,
+//              D_diff);
 //          this->dict_gpu_optimize(bottom_data + bottom[idx]->offset(n), alpha,
 //              D, (Dtype)etha_, tmp1, tmp2, D_diff);
 //          // Mark dictionary as unnormalized
 //          is_dict_normalized_ = false;
+//          Dtype* Dflag = this->blobs_[bias_idx_ + 1]->mutable_cpu_data();
+//          *Dflag = (Dtype)1.;
 //        }
 //      }
 //    }
@@ -273,44 +279,22 @@ void DictionaryLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
 }
 
 template <typename Dtype>
-__global__ void kernel_inv_norm(int m, int k, const Dtype* D, Dtype* DtDinv) {
-  CUDA_KERNEL_LOOP(index, k) {
-    Dtype res = (Dtype)0.;
-    for (int j = 0; j < m; ++j)
-      res += D[index+j*k] * D[index+j*k];
-    DtDinv[index] = (Dtype)1. / res;
-  }
-}
-
-template <typename Dtype>
-void DictionaryLayer<Dtype>::precompute_pseudoinverse_gpu(int m, int k,
-    const Dtype* D, Dtype* DtDinv, Dtype* Ddagger) {
-  // Precompute diag(inv(D^T*D))
-  kernel_inv_norm<Dtype><<<CAFFE_GET_BLOCKS(k), CAFFE_CUDA_NUM_THREADS>>>(
-      m, k, D, DtDinv);
-  // Compute transpose of D^dagger by multiplying each row of D with diag(inv(D^T*D))
-  for (int j = 0; j < m; ++j)
-    caffe_gpu_mul(k, D+j*k, DtDinv, Ddagger+j*k);
-}
-
-
-template <typename Dtype>
 void DictionaryLayer<Dtype>::dict_gpu_backprop(const Dtype* x, const Dtype* dl_dx,
-    const Dtype* mod_alpha_diff, const Dtype* Dtdagger, const Dtype* diagDtDinv,
-    Dtype* tmp1, Dtype* tmp2, Dtype* D_diff) {
-  int m = kernel_dim_;
-  int k = num_output_;
-  // Compute intermediate products
-  // tmp1 = x^T * (D^dagger)^T
-  caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, 1, k, m, (Dtype)1., x,
-      Dtdagger, (Dtype)0., tmp1);
-  // tmp2 = dl_dx * inv(D^T*D) = dl_dalpha *. diag(inv(D^T*D))
-  caffe_gpu_mul(k, mod_alpha_diff, diagDtDinv, tmp2);
-  // Compute gradient of dictionary and add it to D_diff
-  caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, m, k, 1, -(Dtype)2., dl_dx,
-      tmp1, (Dtype)1., D_diff);
-  caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, m, k, 1, (Dtype)1., x,
-      tmp2, (Dtype)1., D_diff);
+      const Dtype* mod_alpha_diff, const Dtype* Dtdagger, const Dtype* Vt,
+      const Dtype* Vt_sn2, Dtype* tmp1, Dtype* tmp2, Dtype* tmp3, Dtype* D_diff) {
+//  int m = kernel_dim_;
+//  int k = num_output_;
+//  // Compute intermediate products
+//  // tmp1 = x^T * (D^dagger)^T
+//  caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, 1, k, m, (Dtype)1., x,
+//      Dtdagger, (Dtype)0., tmp1);
+//  // tmp2 = dl_dx * inv(D^T*D) = dl_dalpha *. diag(inv(D^T*D))
+//  caffe_gpu_mul(k, mod_alpha_diff, diagDtDinv, tmp2);
+//  // Compute gradient of dictionary and add it to D_diff
+//  caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, m, k, 1, -(Dtype)2., dl_dx,
+//      tmp1, (Dtype)1., D_diff);
+//  caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, m, k, 1, (Dtype)1., x,
+//      tmp2, (Dtype)1., D_diff);
 }
 
 template <typename Dtype>
