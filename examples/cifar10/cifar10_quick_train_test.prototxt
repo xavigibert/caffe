@@ -142,6 +142,23 @@ layer {
     }
   }
 }
+#layer {
+#  name: "relu3"
+#  type: "ReLU"
+#  bottom: "conv3"
+#  top: "conv3"
+#}
+#layer {
+#  name: "pool3"
+#  type: "Pooling"
+#  bottom: "conv3"
+#  top: "conv3"
+#  pooling_param {
+#    pool: AVE
+#    kernel_size: 3
+#    stride: 2
+#  }
+#}
 layer {
   name: "dict1"
   type: "Dictionary"
@@ -156,18 +173,64 @@ layer {
     lr_mult: 2
   }
   dictionary_param {
-    num_output: 64
-    rank: 32
+    num_output: 96
+    rank: 48
     kernel_size: 8
     stride: 1
     weight_filler {
       type: "gaussian"
-      std: 0.01
+      std: 0.1
     }
     lambda: 0.002
-    etha: 0.001
+    etha: 0.05
     num_iter_cg: 8
     num_iter_irls: 8
+  }
+}
+layer {
+  name: "relu4"
+  type: "ReLU"
+  bottom: "dict1"
+  top: "dict1"
+}
+layer {
+  name: "relu3_aux"
+  type: "ReLU"
+  bottom: "conv3"
+  top: "pool3_aux"
+}
+layer {
+  name: "pool3_aux"
+  type: "Pooling"
+  bottom: "pool3_aux"
+  top: "pool3_aux"
+  pooling_param {
+    pool: AVE
+    kernel_size: 3
+    stride: 2
+  }
+}
+layer {
+  name: "ip1_aux"
+  type: "InnerProduct"
+  bottom: "pool3_aux"
+  top: "ip1_aux"
+  propagate_down: true
+  param {
+    lr_mult: 1
+  }
+  param {
+    lr_mult: 2
+  }
+  inner_product_param {
+    num_output: 64
+    weight_filler {
+      type: "gaussian"
+      std: 0.1
+    }
+    bias_filler {
+      type: "constant"
+    }
   }
 }
 layer {
@@ -192,6 +255,35 @@ layer {
     }
   }
 }
+
+#layer {
+#  name: "dict2"
+#  type: "Dictionary"
+#  bottom: "ip2"
+#  top: "dict2"
+#  top: "dict2_loss"
+#  propagate_down: true
+#  param {
+#    lr_mult: 1
+#  }
+#  param {
+#    lr_mult: 2
+#  }
+#  dictionary_param {
+#    num_output: 10
+#    rank: 10
+#    kernel_size: 1
+#    stride: 1
+#    weight_filler {
+#      type: "gaussian"
+#      std: 0.1
+#    }
+#    lambda: 0.002
+#    etha: 0.001
+#    num_iter_cg: 8
+#    num_iter_irls: 8
+#  }
+#}
 layer {
   name: "accuracy"
   type: "Accuracy"
@@ -210,50 +302,11 @@ layer {
   top: "loss"
 }
 layer {
-  name: "relu3_aux"
-  type: "ReLU"
-  bottom: "conv3"
-  top: "relu3_aux"
-}
-layer {
-  name: "pool3_aux"
-  type: "Pooling"
-  bottom: "relu3_aux"
-  top: "pool3_aux"
-  pooling_param {
-    pool: AVE
-    kernel_size: 3
-    stride: 2
-  }
-}
-layer {
-  name: "ip1_aux"
-  type: "InnerProduct"
-  bottom: "pool3_aux"
-  top: "ip1_aux"
-  propagate_down: false
-  param {
-    lr_mult: 1
-  }
-  param {
-    lr_mult: 2
-  }
-  inner_product_param {
-    num_output: 64
-    weight_filler {
-      type: "gaussian"
-      std: 0.1
-    }
-    bias_filler {
-      type: "constant"
-    }
-  }
-}
-layer {
   name: "ip2_aux"
   type: "InnerProduct"
   bottom: "ip1_aux"
   top: "ip2_aux"
+  propagate_down: false
   param {
     lr_mult: 1
   }

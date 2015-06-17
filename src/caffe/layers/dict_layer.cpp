@@ -54,8 +54,8 @@ namespace caffe {
 template <typename Dtype>
 void DictionaryLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-  CHECK_EQ(4, bottom[0]->num_axes()) << "Input must have 4 axes, "
-      << "corresponding to (num, channels, height, width)";
+  //CHECK_EQ(4, bottom[0]->num_axes()) << "Input must have 4 axes, "
+  //    << "corresponding to (num, channels, height, width)";
   // Configure the kernel size, padding, stride, and inputs.
   DictionaryParameter dict_param = this->layer_param_.dictionary_param();
   CHECK(!dict_param.has_kernel_size() !=
@@ -192,30 +192,37 @@ void DictionaryLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 template <typename Dtype>
 void DictionaryLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-  CHECK_EQ(4, bottom[0]->num_axes()) << "Input must have 4 axes, "
-      << "corresponding to (num, channels, height, width)";
+  //CHECK_EQ(4, bottom[0]->num_axes()) << "Input must have 4 axes, "
+  //    << "corresponding to (num, channels, height, width)";
   num_ = bottom[0]->num();
-  height_ = bottom[0]->height();
-  width_ = bottom[0]->width();
+  height_ = bottom[0]->num_axes() > 2 ? bottom[0]->height() : 1;
+  width_ = bottom[0]->num_axes() > 2 ? bottom[0]->width() : 1;
   CHECK_EQ(bottom[0]->channels(), channels_) << "Input size incompatible with"
     " convolution kernel.";
   // TODO: generalize to handle inputs of different shapes.
-  for (int bottom_id = 1; bottom_id < bottom.size(); ++bottom_id) {
-    CHECK_EQ(num_, bottom[bottom_id]->num()) << "Inputs must have same num.";
-    CHECK_EQ(channels_, bottom[bottom_id]->channels())
-        << "Inputs must have same channels.";
-    CHECK_EQ(height_, bottom[bottom_id]->height())
-        << "Inputs must have same height.";
-    CHECK_EQ(width_, bottom[bottom_id]->width())
-        << "Inputs must have same width.";
-  }
+//  for (int bottom_id = 1; bottom_id < bottom.size(); ++bottom_id) {
+//    CHECK_EQ(num_, bottom[bottom_id]->num()) << "Inputs must have same num.";
+//    CHECK_EQ(channels_, bottom[bottom_id]->channels())
+//        << "Inputs must have same channels.";
+//    CHECK_EQ(height_, bottom[bottom_id]->height())
+//        << "Inputs must have same height.";
+//    CHECK_EQ(width_, bottom[bottom_id]->width())
+//        << "Inputs must have same width.";
+//  }
   // Shape the tops.
   compute_output_shape();
   CHECK_EQ(top.size(), 2);
   // top[2*i] Corresponds to the sparse codes
   // top[2*i+1] Is a scalar containing the objective function (loss)
   for (int top_id = 0; top_id < top.size()/2; ++top_id) {
-    top[2*top_id]->Reshape(num_, num_output_, height_out_, width_out_);
+    vector<int> top_shape;
+    top_shape.push_back(num_);
+    top_shape.push_back(num_output_);
+    //if (height_out_ != 1 || width_out_ != 1) {
+      top_shape.push_back(height_out_);
+      top_shape.push_back(width_out_);
+    //}
+    top[2*top_id]->Reshape(top_shape);
     top[2*top_id+1]->Reshape(1, 1, 1, 1);
   }
   conv_out_spatial_dim_ = height_out_ * width_out_;
@@ -259,7 +266,6 @@ void DictionaryLayer<Dtype>::forward_preprocess_cpu() {
   // Orthonormalize dictionary (make sure that D^T*D=diag(D^T*D))
   if (!is_dict_normalized_ || (*Dflag)) {
     Dtype* D = this->blobs_[0]->mutable_cpu_data();
-    LOG(INFO) << "Normalizing. Dflag = " << (*Dflag);
     if (orthogonalize_)
       orthogonalize_dictionary_cpu(m, k, D, &dict_order_[0]);
     else
@@ -268,10 +274,6 @@ void DictionaryLayer<Dtype>::forward_preprocess_cpu() {
     cv::Mat matD(m, k, sizeof(Dtype) == 8 ? CV_64FC1 : CV_32FC1, D);
     cv::Mat matW, matU, matVt;
     cv::SVD::compute(matD, matW, matU, matVt, 0);
-    //save_to_matlab("mat_D.bin", matD);
-    //save_to_matlab("mat_W.bin", matW);
-    //save_to_matlab("mat_U.bin", matU);
-    //save_to_matlab("mat_Vt.bin", matVt);
     // Low-rank approximation on D
     Dtype* W = SV_buffer_.mutable_cpu_data();
     Dtype* U = U_buffer_.mutable_cpu_data();
@@ -288,10 +290,6 @@ void DictionaryLayer<Dtype>::forward_preprocess_cpu() {
     }
     caffe_cpu_gemm(CblasNoTrans, CblasNoTrans, m, k, r, (Dtype)1., U, tmp,
         (Dtype)0., D);
-    //save_to_matlab("mat_Wr.bin", W, r, 1);
-    //save_to_matlab("mat_Ur.bin", U, m, r);
-    //save_to_matlab("mat_Vtr.bin", Vt, r, k);
-    //save_to_matlab("mat_Dr.bin", D, m, k);
     // Precompute pseudoinverse of D
     Dtype* Ddagger = Ddagger_buffer_.mutable_cpu_data();
     Dtype* Vt_sn2 = Vt_sn2_buffer_.mutable_cpu_data();
@@ -307,7 +305,6 @@ void DictionaryLayer<Dtype>::forward_preprocess_cpu() {
         (Dtype)0., tmp1);
     caffe_cpu_gemm(CblasNoTrans, CblasNoTrans, m, k, k, (Dtype)1., D, tmp1,
         (Dtype)0., Ddagger);
-    //save_to_matlab("mat_Ddagger.bin", Ddagger, m, k);
     is_dict_normalized_ = true;
     *Dflag = (Dtype)0.;
   }
@@ -451,8 +448,6 @@ double DictionaryLayer<Dtype>::forward_cpu_sparse_coding(const Dtype* input,
       vec_alpha[j] = 1.0;
     // Perform num_iter_irls iterations of iteratively reweighted
     // least squares using the previous result as starting value
-    //save_to_matlab("mat_D.bin", D, m, k);
-    //save_to_matlab("mat_x.bin", x, m, 1);
     for (int iter_irls = 0; iter_irls < num_iter_irls_; ++iter_irls)
     {
       // Build matrix w = diag(2*lambda/fabs(alpha[])
@@ -470,22 +465,22 @@ double DictionaryLayer<Dtype>::forward_cpu_sparse_coding(const Dtype* input,
       // is more efficient to compute
       conjugate_gradient_cpu(k, rank_, diag, Vt, Vt_s2, vec_d, vec_alpha,
           num_iter_cg_, vec_p, vec_r, vec_w, tmp);
-      //vector<Dtype> C(k*k);
-      //caffe_cpu_gemm<Dtype>(CblasTrans, )
     }
+//    // Apply soft threshold to sparse codes
+//    for (int j = 0; j < k; ++j) {
+//      if (fabs(vec_alpha[j]) < lambda_)
+//        vec_alpha[j] = (Dtype)0.;
+//      else if(vec_alpha[j] > 0)
+//        vec_alpha[j] = vec_alpha[j] - (Dtype)lambda_;
+//      else
+//        vec_alpha[j] = vec_alpha[j] + (Dtype)lambda_;
+//    }
     // Apply hard threshold to sparse codes
     for (int j = 0; j < k; ++j) {
       if (fabs(vec_alpha[j]) < lambda_)
         vec_alpha[j] = (Dtype)0.;
     }
     loss += objective_function_cpu(m, k, D, x, vec_alpha);
-//    if (loss > 10000.) {
-//      save_to_matlab("mat_D.bin", D, m, k);
-//      save_to_matlab("mat_x.bin", x, m, 1);
-//      save_to_matlab("mat_alpha.bin", vec_alpha, k, 1);
-//      save_to_matlab("mat_lambda.bin", &lambda_, 1, 1);
-//      LOG(FATAL) << "loss = " << loss;
-//    }
   }
   // Sparse codes are in pixel-first order, we need to transpose them so they
   // are in channel-first order
@@ -562,18 +557,8 @@ void DictionaryLayer<Dtype>::conjugate_gradient_cpu(int k, int r,
       Dtype* x, int num_iter, Dtype* temp_p, Dtype* temp_r, Dtype* temp_w,
       Dtype* tmp) {
   // Initialize the residual
-  //save_to_matlab("mat_alpha.bin", x, k, 1);
-  //save_to_matlab("mat_w.bin", weights, k, 1);
-  //save_to_matlab("mat_Vt.bin", Vt, r, k);
-  //save_to_matlab("mat_Vt2.bin", Vt2, r, k);
   compute_Cx_cpu(k, r, weights, Vt, Vt2, x, tmp, temp_r);
-  //save_to_matlab("mat_d.bin", d, k, 1);
   caffe_sub(k, d, temp_r, temp_r);
-  //save_to_matlab("mat_temp_r.bin", temp_r, k, 1);
-
-  //memcpy(temp_r, d, k*sizeof(Dtype));
-  //caffe_cpu_gemv<Dtype>(CblasNoTrans, k, k,
-  //     (Dtype)(-1.), C, x, (Dtype)1., temp_r);
   // Compute norm of the residual
   Dtype prev_norm_r = caffe_cpu_dot<Dtype>(k, temp_r, temp_r);
   if (fabs(prev_norm_r) < EPSILON) {
@@ -586,14 +571,7 @@ void DictionaryLayer<Dtype>::conjugate_gradient_cpu(int k, int r,
   {
     // w = C * p
     compute_Cx_cpu(k, r, weights, Vt, Vt2, temp_p, tmp, temp_w);
-    //save_to_matlab("mat_temp_w.bin", temp_w, k, 1);
-    //LOG(FATAL) << "FIX ME!";
-    //caffe_cpu_gemv<Dtype>(CblasNoTrans, k, k,
-    //     (Dtype)1., C, temp_p, (Dtype)0., temp_w);
-    // alpha = norm(r) / dot(p, w)
     Dtype dot_p_w = caffe_cpu_dot<Dtype>(k, temp_p, temp_w);
-    //if (fabs(dot_p_w) < EPSILON)
-    //  return false;
     Dtype alpha = prev_norm_r / dot_p_w;
     CHECK(!isnan(alpha));
     // x = x + alpha*p
@@ -612,7 +590,6 @@ void DictionaryLayer<Dtype>::conjugate_gradient_cpu(int k, int r,
       return;
     }
   }
-  return;
 }
 
 template <typename Dtype>
@@ -732,10 +709,6 @@ void DictionaryLayer<Dtype>::backward_cpu_gemm(const Dtype* mod_alpha_diff,
       1, num_output_,
       (Dtype)1., D, mod_alpha_diff,
       (Dtype)0., col_buff);
-//  save_to_matlab("mat_Ddagger.bin", D, kernel_dim_, num_output_);
-//  save_to_matlab("mat_D.bin", this->blobs_[0]->cpu_data(), kernel_dim_, num_output_);
-//  save_to_matlab("mat_mod_alpha_diff.bin", mod_alpha_diff, num_output_, 1);
-//  save_to_matlab("mat_x_diff.bin", col_buff, kernel_dim_, 1);
   if (!is_1x1_) {
     conv_col2im_cpu(col_buff, input);
   }
