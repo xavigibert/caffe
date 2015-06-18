@@ -6,6 +6,9 @@
 #include "caffe/util/math_functions.hpp"
 #include "caffe/vision_layers.hpp"
 
+#include <thrust/extrema.h>
+#include <thrust/device_ptr.h>
+
 #define EPSILON (1e-6)
 
 namespace caffe {
@@ -21,9 +24,211 @@ __global__ void kernel_norm(int m, int k, const Dtype* D, Dtype* diagDtD) {
 }
 
 template <typename Dtype>
+__global__ void kernel_vector_to_column(int m, int k, int j, const Dtype* v,
+      Dtype* A) {
+  CUDA_KERNEL_LOOP(index, m) {
+    A[j+index*k] = v[index];
+  }
+}
+
+template <typename Dtype>
+__global__ void kernel_column_to_vector(int m, int k, int j, const Dtype* A,
+      Dtype* v) {
+  CUDA_KERNEL_LOOP(index, m) {
+    v[index] = A[j+index*k];
+  }
+}
+
+// Versions of caffe_gpu_scal that take scale factor as reference, so we can
+// pass a pointer to the GPU.
+// Remember, before calling this function, we need to call
+//    cublasSetPointerMode(CUBLAS_POINTER_MODE_DEVICE);
+// and, afterwards, we need to call
+//    cublasSetPointerMode(CUBLAS_POINTER_MODE_HOST);
+template <typename Dtype>
+void caffe_gpu_scal(const int N, const Dtype* alpha, Dtype *X);
+
+template <>
+void caffe_gpu_scal<float>(const int N, const float* alpha, float *X) {
+  CUBLAS_CHECK(cublasSscal(Caffe::cublas_handle(), N, alpha, X, 1));
+}
+
+template <>
+void caffe_gpu_scal<double>(const int N, const double* alpha, double *X) {
+  CUBLAS_CHECK(cublasDscal(Caffe::cublas_handle(), N, alpha, X, 1));
+}
+
+// Normalize if norm > 1
+template <typename Dtype>
+__global__ void kernel_conditional_normalize(const int N, const Dtype* norm, Dtype* v) {
+  CUDA_KERNEL_LOOP(index, N) {
+    if (*norm > (Dtype)1.)
+      v[index] /= sqrt(*norm);
+  }
+}
+
+template <typename Dtype>
+void DictionaryLayer<Dtype>::normalize_dictionary_gpu(int m, int k, Dtype* D) {
+  // Normalize in a temporary matrix Z (D transposed)
+  Dtype* Z = Z_buffer_.mutable_gpu_data();
+  transpose_gpu(m, k, D, Z);
+  // Normalize columns whose norm is greater than 1
+  Dtype* norm = tmp_buffer_.mutable_gpu_data();
+  // Tell cuBLAS that vector "norm" is in device memory
+  cublasSetPointerMode(Caffe::cublas_handle(), CUBLAS_POINTER_MODE_DEVICE);
+  for (int i = 0; i < k; ++i) {
+    Dtype* vi = Z + i*m;
+    caffe_gpu_dot(m, vi, vi, norm);
+    kernel_conditional_normalize<Dtype><<<CAFFE_GET_BLOCKS(m),
+        CAFFE_CUDA_NUM_THREADS>>>(m, norm, vi);
+  }
+  // Switch pointer mode back to host
+  cublasSetPointerMode(Caffe::cublas_handle(), CUBLAS_POINTER_MODE_HOST);
+  transpose_gpu(k, m, Z, D);
+}
+
+// Same as forward_preprocess_cpu, but assuming that matrix Vt has been computed
+// in previous iteration
+template <typename Dtype>
+void DictionaryLayer<Dtype>::fast_preprocess_gpu() {
+  Dtype* Dflag = this->blobs_[bias_idx_ + 1]->mutable_cpu_data();
+  int m = kernel_dim_;
+  int k = num_output_;
+  int r = rank_;
+  // Normalize dictionary (make sure that the norm for each column is <= 1)
+  // Orthonormalize dictionary (make sure that D^T*D=diag(D^T*D))
+  if (!is_dict_normalized_ || (*Dflag)) {
+    Dtype* D = this->blobs_[0]->mutable_gpu_data();
+    if (orthogonalize_)
+      NOT_IMPLEMENTED; //orthogonalize_dictionary_gpu(m, k, D, &dict_order_[0]);
+    else
+      normalize_dictionary_gpu(m, k, D);
+    // Precompute SVD and pseudoinverse of D
+    // We assume that matrix D has not changed much since previous iteration,
+    // so we use previous vectors in Vt and refine
+    // Note: we use Ddagger as temporary storage
+    Dtype* work = Ddagger_buffer_.mutable_gpu_data(); // mxk
+    Dtype* tmp = tmp_buffer_.mutable_gpu_data();
+    caffe_gpu_memcpy(m*k*sizeof(Dtype), D, work);
+    // Low-rank approximation on D
+    Dtype* W = SV_buffer_.mutable_gpu_data(); // rx1
+    Dtype* U = U_buffer_.mutable_gpu_data();  // mxr
+    Dtype* Vt = this->blobs_[bias_idx_ + 2]->mutable_gpu_data();  // r*k
+    Dtype* u = tmp;
+    Dtype* prev_u = tmp + m;
+    vector<Dtype> hostW(r);
+    for (int ri = 0; ri < r; ++ri) {
+      // Copy column ri of U into u
+      kernel_column_to_vector<Dtype><<<CAFFE_GET_BLOCKS(m),
+          CAFFE_CUDA_NUM_THREADS>>>(m, r, ri, U, u);
+      Dtype* v = Vt + ri*k;
+      const int max_iter = 10;
+      for (int iter = 0; iter < max_iter; ++iter) {
+        caffe_gpu_gemm(CblasNoTrans, CblasNoTrans, m, 1, k, (Dtype)1., work, v,
+            (Dtype)0., u);
+        // Tell cuBLAS that vector W is in device memory
+        cublasSetPointerMode(Caffe::cublas_handle(), CUBLAS_POINTER_MODE_DEVICE);
+        caffe_gpu_dot<Dtype>(m, u, u, &W[ri]);
+        // Do W[ri] = 1/sqrt(W[ri]) on device memory
+        caffe_gpu_powx(1, &W[ri], -(Dtype)0.5, &W[ri]);
+        caffe_gpu_scal(m, &W[ri], u);
+        // Copy u back into corresponding column in U
+        kernel_vector_to_column<Dtype><<<CAFFE_GET_BLOCKS(m),
+            CAFFE_CUDA_NUM_THREADS>>>(m, r, ri, u, U);
+        // The constants provided to gemm are in host memory
+        cublasSetPointerMode(Caffe::cublas_handle(), CUBLAS_POINTER_MODE_HOST);
+        caffe_gpu_gemm(CblasTrans, CblasNoTrans, k, 1, m, (Dtype)1., work, u,
+            (Dtype)0., v);
+        // Tell cuBLAS that vector W is in device memory
+        cublasSetPointerMode(Caffe::cublas_handle(), CUBLAS_POINTER_MODE_DEVICE);
+        caffe_gpu_dot<Dtype>(k, v, v, &W[ri]);
+        // Do W[ri] = 1/sqrt(W[ri]) on device memory
+        caffe_gpu_powx(1, &W[ri], -(Dtype)0.5, &W[ri]);
+        caffe_gpu_scal(k, &W[ri], v);
+        // Set W[ri] to s
+        caffe_gpu_powx(1, &W[ri], -(Dtype)1., &W[ri]);
+        // Switch pointer mode back to host
+        cublasSetPointerMode(Caffe::cublas_handle(), CUBLAS_POINTER_MODE_HOST);
+        // Check for convergence
+        caffe_gpu_sub(m, u, prev_u, prev_u);
+        Dtype delta = (Dtype)0.;
+        caffe_gpu_dot<Dtype>(m, prev_u, prev_u, &delta);
+        delta /= m;
+        if (delta < 2*EPSILON || iter == max_iter-1) {
+          //LOG(INFO) << "Converged after " << iter << " iterations, " <<
+          //    " delta = " << delta;
+          break;
+        }
+        caffe_gpu_memcpy(m*sizeof(Dtype), u, prev_u);
+      }
+      // Deflate
+      caffe_gpu_memcpy(sizeof(Dtype), &W[ri], &hostW[ri]);
+      caffe_gpu_gemm(CblasNoTrans, CblasNoTrans, m, k, 1, -(Dtype)hostW[ri], u,
+          v, (Dtype)1., work);
+    }
+    // Reconstruct D from rank r approximation
+    caffe_gpu_memcpy(r*k*sizeof(Dtype), Vt, tmp);
+    for (int i = 0; i < r; ++i) {
+      hostW[i] = std::max(hostW[i], (Dtype)EPSILON);
+      caffe_gpu_scal(k, hostW[i], tmp + i*k);
+    }
+    caffe_gpu_gemm(CblasNoTrans, CblasNoTrans, m, k, r, (Dtype)1., U, tmp,
+        (Dtype)0., D);
+    // Precompute pseudoinverse of D
+    Dtype* Ddagger = Ddagger_buffer_.mutable_gpu_data();
+    Dtype* Vt_sn2 = Vt_sn2_buffer_.mutable_gpu_data();
+    Dtype* Vt_s2 = this->blobs_[bias_idx_ + 3]->mutable_gpu_data();
+    caffe_gpu_memcpy(r*k*sizeof(Dtype), Vt, Vt_sn2);
+    caffe_gpu_memcpy(r*k*sizeof(Dtype), Vt, Vt_s2);
+    for (int i = 0; i < r; ++i) {
+      caffe_gpu_scal(k, (Dtype)1./(hostW[i]*hostW[i]), Vt_sn2 + i*k);
+      caffe_gpu_scal(k, hostW[i]*hostW[i], Vt_s2 + i*k);
+    }
+    caffe_gpu_gemm(CblasTrans, CblasNoTrans, k, k, r, (Dtype)1., Vt, Vt_sn2,
+        (Dtype)0., tmp);
+    caffe_gpu_gemm(CblasNoTrans, CblasNoTrans, m, k, k, (Dtype)1., D, tmp,
+        (Dtype)0., Ddagger);
+    is_dict_normalized_ = true;
+    *Dflag = (Dtype)0.;
+  }
+}
+
+template <typename Dtype>
 void DictionaryLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-  Forward_cpu(bottom, top);
+//  Forward_cpu(bottom, top);
+
+  // Perform normalization and decomposition (if necessary)
+  if (first_time_ || this->phase_ == TEST) {
+    forward_preprocess_cpu();
+    first_time_ = false;
+  } else
+    fast_preprocess_gpu();
+  // Perform sparse coding (and optionally dictionary learning) on each input vector
+  const Dtype* D = this->blobs_[0]->cpu_data();
+  const Dtype* Vt = this->blobs_[bias_idx_ + 2]->cpu_data();
+  const Dtype* Vt_s2 = this->blobs_[bias_idx_ + 3]->cpu_data();
+  for (int i = 0; i < top.size()/2; ++i) {
+    const Dtype* bottom_data = bottom[i]->cpu_data();
+    Dtype* top_data = top[2*i]->mutable_cpu_data();
+    double loss = 0.;
+    //LOG(INFO) << "Input norm = " << sqrt(caffe_cpu_dot<Dtype>(bottom[i]->count(),
+    //    bottom_data, bottom_data)/bottom[i]->count());
+    for (int n = 0; n < this->num_; ++n) {
+      // Perform forward sparse coding
+      loss += this->forward_cpu_sparse_coding(bottom_data + bottom[i]->offset(n),
+          D, Vt, Vt_s2, top_data + top[2*i]->offset(n));
+      if (this->bias_term_) {
+        const Dtype* bias = this->blobs_[bias_idx_]->cpu_data();
+        this->forward_cpu_bias(top_data + top[i]->offset(n), bias);
+      }
+    }
+    // Put objective value in second output
+    top_data = top[2*i+1]->mutable_cpu_data();
+    *top_data = Dtype(loss/num_);
+  }
+
+
 //  // Perform normalization and decomposition (if necessary)
 //  forward_preprocess_cpu();
 //  // Perform sparse coding (and optionally dictionary learning) on each input vector

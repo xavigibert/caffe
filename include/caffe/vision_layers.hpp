@@ -350,6 +350,7 @@ class DictionaryLayer : public Layer<Dtype> {
  protected:
   // Perform sparse coding and (optionally) dictionary update
   void forward_preprocess_cpu();
+  void fast_preprocess_cpu();
   double forward_cpu_sparse_coding(const Dtype* input, const Dtype* D,
       const Dtype* Vt, const Dtype *Vt_s2, Dtype* output,
       bool skip_im2col = false);
@@ -381,6 +382,7 @@ class DictionaryLayer : public Layer<Dtype> {
   void backward_cpu_bias(Dtype* bias, const Dtype* input);
 
 #ifndef CPU_ONLY
+  void fast_preprocess_gpu();
   void forward_gpu_sparse_coding(const Dtype* input, const Dtype* D,
       const Dtype* Vt, const Dtype *Vt_s2, Dtype* output, Dtype* loss,
       bool skip_im2col = false);
@@ -390,6 +392,7 @@ class DictionaryLayer : public Layer<Dtype> {
   void compute_Cx_gpu(int k, int r, const Dtype* w, const Dtype* Vt,
       const Dtype* Vt2, const Dtype* x, Dtype* tmp, Dtype* Cx);
   void forward_gpu_bias(Dtype* output, const Dtype* bias);
+  void normalize_dictionary_gpu(int m, int k, Dtype* D);
   void transpose_gpu(int m, int k, const Dtype* A, Dtype* B);
   void add_objective_gpu(int m, int k, const Dtype* D, const Dtype* x,
       const Dtype* alpha, Dtype* loss);
@@ -431,6 +434,7 @@ class DictionaryLayer : public Layer<Dtype> {
   int output_offset_;
   int conv_out_spatial_dim_;
   bool is_dict_normalized_;
+  bool first_time_;
   int bias_idx_;
 
   Blob<Dtype> col_buffer_;

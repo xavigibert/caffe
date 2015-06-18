@@ -187,6 +187,7 @@ void DictionaryLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   // Propagate gradients to the parameters (as directed by backward pass).
   this->param_propagate_down_.resize(this->blobs_.size(), true);
   is_dict_normalized_ = false;
+  first_time_ = true;
 }
 
 template <typename Dtype>
@@ -310,11 +311,103 @@ void DictionaryLayer<Dtype>::forward_preprocess_cpu() {
   }
 }
 
+// Same as forward_preprocess_cpu, but assuming that matrix Vt has been computed
+// in previous iteration
+template <typename Dtype>
+void DictionaryLayer<Dtype>::fast_preprocess_cpu() {
+  Dtype* Dflag = this->blobs_[bias_idx_ + 1]->mutable_cpu_data();
+  int m = kernel_dim_;
+  int k = num_output_;
+  int r = rank_;
+  // Normalize dictionary (make sure that the norm for each column is <= 1)
+  // Orthonormalize dictionary (make sure that D^T*D=diag(D^T*D))
+  if (!is_dict_normalized_ || (*Dflag)) {
+    Dtype* D = this->blobs_[0]->mutable_cpu_data();
+    if (orthogonalize_)
+      orthogonalize_dictionary_cpu(m, k, D, &dict_order_[0]);
+    else
+      normalize_dictionary_cpu(m, k, D);
+    // Precompute SVD and pseudoinverse of D
+    // We assume that matrix D has not changed much since previous iteration,
+    // so we use previous vectors in Vt and refine
+    // Note: we use Ddagger as temporary storage
+    Dtype* work = Ddagger_buffer_.mutable_cpu_data(); // mxk
+    Dtype* tmp = tmp_buffer_.mutable_cpu_data();
+    memcpy(work, D, m*k*sizeof(Dtype));
+    // Low-rank approximation on D
+    Dtype* W = SV_buffer_.mutable_cpu_data(); // rx1
+    Dtype* U = U_buffer_.mutable_cpu_data();  // mxr
+    Dtype* Vt = this->blobs_[bias_idx_ + 2]->mutable_cpu_data();  // r*k
+    Dtype* u = tmp;
+    Dtype* prev_u = tmp + m;
+    for (int ri = 0; ri < r; ++ri) {
+      // Copy column ri of U into u
+      for (int j = 0; j < m; ++j)
+        prev_u[j] = U[ri+j*r];
+      Dtype* v = Vt + ri*k;
+      const int max_iter = 10;
+      for (int iter = 0; iter < max_iter; ++iter) {
+        caffe_cpu_gemm(CblasNoTrans, CblasNoTrans, m, 1, k, (Dtype)1., work, v,
+            (Dtype)0., u);
+        W[ri] = sqrt(caffe_cpu_dot<Dtype>(m, u, u));
+        caffe_scal(m, (Dtype)1./W[ri], u);
+        // Copy u back into corresponding column in U
+        for (int j = 0; j < m; ++j)
+          U[ri+j*r] = u[j];
+        caffe_cpu_gemm(CblasTrans, CblasNoTrans, k, 1, m, (Dtype)1., work, u,
+            (Dtype)0., v);
+        W[ri] = sqrt(caffe_cpu_dot<Dtype>(k, v, v));
+        caffe_scal(k, (Dtype)1./W[ri], v);
+        // Check for convergence
+        caffe_sub(m, u, prev_u, prev_u);
+        Dtype delta = caffe_cpu_dot<Dtype>(m, prev_u, prev_u)/m;
+        if (delta < 2*EPSILON || iter == max_iter-1) {
+          //LOG(INFO) << "Converged after " << iter << " iterations, " <<
+          //    " delta = " << delta;
+          break;
+        }
+        memcpy(prev_u, u, m*sizeof(Dtype));
+      }
+      // Deflate
+      caffe_cpu_gemm(CblasNoTrans, CblasNoTrans, m, k, 1, -(Dtype)W[ri], u, v,
+          (Dtype)1., work);
+    }
+    // Reconstruct D from rank r approximation
+    memcpy(tmp, Vt, r*k*sizeof(Dtype));
+    for (int i = 0; i < r; ++i) {
+      W[i] = std::max(W[i], (Dtype)EPSILON);
+      caffe_scal(k, W[i], tmp + i*k);
+    }
+    caffe_cpu_gemm(CblasNoTrans, CblasNoTrans, m, k, r, (Dtype)1., U, tmp,
+        (Dtype)0., D);
+    // Precompute pseudoinverse of D
+    Dtype* Ddagger = Ddagger_buffer_.mutable_cpu_data();
+    Dtype* Vt_sn2 = Vt_sn2_buffer_.mutable_cpu_data();
+    Dtype* Vt_s2 = this->blobs_[bias_idx_ + 3]->mutable_cpu_data();
+    caffe_copy(r*k, Vt, Vt_sn2);
+    caffe_copy(r*k, Vt, Vt_s2);
+    for (int i = 0; i < r; ++i) {
+      caffe_scal(k, (Dtype)1./(W[i]*W[i]), Vt_sn2 + i*k);
+      caffe_scal(k, W[i]*W[i], Vt_s2 + i*k);
+    }
+    caffe_cpu_gemm(CblasTrans, CblasNoTrans, k, k, r, (Dtype)1., Vt, Vt_sn2,
+        (Dtype)0., tmp);
+    caffe_cpu_gemm(CblasNoTrans, CblasNoTrans, m, k, k, (Dtype)1., D, tmp,
+        (Dtype)0., Ddagger);
+    is_dict_normalized_ = true;
+    *Dflag = (Dtype)0.;
+  }
+}
+
 template <typename Dtype>
 void DictionaryLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   // Perform normalization and decomposition (if necessary)
-  forward_preprocess_cpu();
+  if (first_time_ || this->phase_ == TEST) {
+    forward_preprocess_cpu();
+    first_time_ = false;
+  } else
+    fast_preprocess_cpu();
   // Perform sparse coding (and optionally dictionary learning) on each input vector
   const Dtype* D = this->blobs_[0]->cpu_data();
   const Dtype* Vt = this->blobs_[bias_idx_ + 2]->cpu_data();
@@ -382,13 +475,14 @@ void DictionaryLayer<Dtype>::orthogonalize_dictionary_cpu(int m, int k, Dtype* D
 
 template <typename Dtype>
 void DictionaryLayer<Dtype>::normalize_dictionary_cpu(int m, int k, Dtype* D) {
-  // Normalize in a temporary matrix Z (D transposed and permutted)
+  // Normalize in a temporary matrix Z (D transposed)
   Dtype* Z = Z_buffer_.mutable_cpu_data();
   for (int i = 0; i < k; ++i) {
     for (int j = 0; j < m; ++j) {
       Z[i*m+j] = D[j*k+i];
     }
   }
+//  transpose_cpu(m, k, D, Z);
   // Normalize columns whose norm is greater than 1
   for (int i = 0; i < k; ++i) {
     Dtype* vi = Z + i*m;
@@ -402,6 +496,7 @@ void DictionaryLayer<Dtype>::normalize_dictionary_cpu(int m, int k, Dtype* D) {
       D[j*k+i] = Z[i*m+j];
     }
   }
+//  transpose_cpu(k, m, Z, D);
 }
 
 // Perform B = A^T
