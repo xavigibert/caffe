@@ -383,8 +383,8 @@ class DictionaryLayer : public Layer<Dtype> {
 
 #ifndef CPU_ONLY
   void fast_preprocess_gpu();
-  void forward_gpu_sparse_coding(const Dtype* input, const Dtype* D,
-      const Dtype* Vt, const Dtype *Vt_s2, Dtype* output, Dtype* loss,
+  double forward_gpu_sparse_coding(const Dtype* input, const Dtype* D,
+      const Dtype* Vt, const Dtype *Vt_s2, Dtype* output,
       bool skip_im2col = false);
   void conjugate_gradient_gpu(int k, int r, const Dtype* w, const Dtype* Vt,
       const Dtype* Vt_s2, const Dtype* d, Dtype* x, int num_iter, Dtype* temp_p,

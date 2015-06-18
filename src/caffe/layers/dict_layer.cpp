@@ -368,14 +368,58 @@ void DictionaryLayer<Dtype>::fast_preprocess_cpu() {
         }
         memcpy(prev_u, u, m*sizeof(Dtype));
       }
-      // Deflate
-      caffe_cpu_gemm(CblasNoTrans, CblasNoTrans, m, k, 1, -(Dtype)W[ri], u, v,
-          (Dtype)1., work);
+      // Check that singular vectors are in non-increasing order
+      int ri1 = ri;
+      for (int i = 0; i < ri; ++i) {
+        if (W[i] < W[ri]) {
+          ri1 = i;
+          break;
+        }
+      }
+      if (ri1 != ri) {
+        //LOG(INFO) << "Swapping vectors W[" << ri << "] = " << W[ri] <<
+        //    " and W[" << ri1 << "] = " << W[ri1];
+        std::swap(W[ri], W[ri1]);
+        // Swap u[ri] and u[ri1]
+        for (int j = 0; j < m; ++j)
+          std::swap(U[ri+j*k], U[ri1+j*k]);
+        for (int j = 0; j < k; ++j)
+          std::swap(Vt[ri*k+j], Vt[ri1*k+j]);
+        // Inflate
+        memcpy(work, D, m*k*sizeof(Dtype));
+        // Re-deflate
+        for (int i = 0; i < ri1; ++i) {
+          // Copy column ri of U into u
+          for (int j = 0; j < m; ++j)
+            u[j] = U[i+j*r];
+          Dtype* v = Vt + i*k;
+          caffe_cpu_gemm(CblasNoTrans, CblasNoTrans, m, k, 1, -(Dtype)W[i], u, v,
+              (Dtype)1., work);
+        }
+        // Recompute new singular vector
+        ri = ri1-1;
+      }
+      else {
+        // Deflate
+        caffe_cpu_gemm(CblasNoTrans, CblasNoTrans, m, k, 1, -(Dtype)W[ri], u, v,
+            (Dtype)1., work);
+      }
     }
+//    // Make sure that singular vectors are stored in non-increasing order
+//    for (int i = 0; i < r; ++i) {
+//      int i1 = i;
+//      for (int j = i+1; j < r; ++j) {
+//        if (W[j] > W[i1])
+//          i1 = j;
+//      }
+//      if (i1 != i) {
+//        LOG(INFO) << "Swapping vectors " << i << " and " << i1;
+//      }
+//    }
     // Reconstruct D from rank r approximation
     memcpy(tmp, Vt, r*k*sizeof(Dtype));
     for (int i = 0; i < r; ++i) {
-      W[i] = std::max(W[i], (Dtype)EPSILON);
+      //W[i] = std::max(W[i], (Dtype)EPSILON);
       caffe_scal(k, W[i], tmp + i*k);
     }
     caffe_cpu_gemm(CblasNoTrans, CblasNoTrans, m, k, r, (Dtype)1., U, tmp,
@@ -387,8 +431,14 @@ void DictionaryLayer<Dtype>::fast_preprocess_cpu() {
     caffe_copy(r*k, Vt, Vt_sn2);
     caffe_copy(r*k, Vt, Vt_s2);
     for (int i = 0; i < r; ++i) {
-      caffe_scal(k, (Dtype)1./(W[i]*W[i]), Vt_sn2 + i*k);
-      caffe_scal(k, W[i]*W[i], Vt_s2 + i*k);
+      if (W[i] > EPSILON) {
+        caffe_scal(k, (Dtype)1./(W[i]*W[i]), Vt_sn2 + i*k);
+        caffe_scal(k, W[i]*W[i], Vt_s2 + i*k);
+      }
+      else {
+        caffe_scal(k, (Dtype)0., Vt_sn2 + i*k);
+        caffe_scal(k, (Dtype)0., Vt_s2 + i*k);
+      }
     }
     caffe_cpu_gemm(CblasTrans, CblasNoTrans, k, k, r, (Dtype)1., Vt, Vt_sn2,
         (Dtype)0., tmp);
@@ -406,7 +456,8 @@ void DictionaryLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   if (first_time_ || this->phase_ == TEST) {
     forward_preprocess_cpu();
     first_time_ = false;
-  } else
+  }
+  else
     fast_preprocess_cpu();
   // Perform sparse coding (and optionally dictionary learning) on each input vector
   const Dtype* D = this->blobs_[0]->cpu_data();

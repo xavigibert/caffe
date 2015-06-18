@@ -67,6 +67,27 @@ __global__ void kernel_conditional_normalize(const int N, const Dtype* norm, Dty
   }
 }
 
+// Swap 2 columns in a matrix
+template <typename Dtype>
+__global__ void kernel_swap_columns(int m, int k, int j0, int j1, Dtype* A) {
+  CUDA_KERNEL_LOOP(index, m) {
+    Dtype tmp = A[j0+index*k];
+    A[j0+index*k] = A[j1+index*k];
+    A[j1+index*k] = tmp;
+  }
+}
+
+// Swap 2 vectors
+template <typename Dtype>
+__global__ void kernel_swap_vectors(const int N, Dtype* v0, Dtype* v1) {
+  CUDA_KERNEL_LOOP(index, N) {
+    Dtype tmp = v0[index];
+    v0[index] = v1[index];
+    v1[index] = tmp;
+  }
+}
+
+
 template <typename Dtype>
 void DictionaryLayer<Dtype>::normalize_dictionary_gpu(int m, int k, Dtype* D) {
   // Normalize in a temporary matrix Z (D transposed)
@@ -154,22 +175,55 @@ void DictionaryLayer<Dtype>::fast_preprocess_gpu() {
         Dtype delta = (Dtype)0.;
         caffe_gpu_dot<Dtype>(m, prev_u, prev_u, &delta);
         delta /= m;
-        if (delta < 2*EPSILON || iter == max_iter-1) {
+        if (delta < 2 * EPSILON || iter == max_iter-1) {
           //LOG(INFO) << "Converged after " << iter << " iterations, " <<
           //    " delta = " << delta;
           break;
         }
         caffe_gpu_memcpy(m*sizeof(Dtype), u, prev_u);
       }
-      // Deflate
       caffe_gpu_memcpy(sizeof(Dtype), &W[ri], &hostW[ri]);
-      caffe_gpu_gemm(CblasNoTrans, CblasNoTrans, m, k, 1, -(Dtype)hostW[ri], u,
-          v, (Dtype)1., work);
+      // Check that singular vectors are in non-increasing order
+      int ri1 = ri;
+      for (int i = 0; i < ri; ++i) {
+        if (hostW[i] < hostW[ri]) {
+          ri1 = i;
+          break;
+        }
+      }
+      if (ri1 != ri) {
+        //LOG(INFO) << "Swapping vectors W[" << ri << "] = " << W[ri] <<
+        //    " and W[" << ri1 << "] = " << W[ri1];
+        std::swap(hostW[ri], hostW[ri1]);
+        // Swap u[ri] and u[ri1]
+        kernel_swap_columns<Dtype><<<CAFFE_GET_BLOCKS(m),
+            CAFFE_CUDA_NUM_THREADS>>>(m, r, ri, ri1, U);
+        kernel_swap_vectors<Dtype><<<CAFFE_GET_BLOCKS(k),
+            CAFFE_CUDA_NUM_THREADS>>>(k, Vt + ri*k, Vt + ri1*k);
+        // Inflate
+        caffe_gpu_memcpy(m*k*sizeof(Dtype), D, work);
+        // Re-deflate
+        for (int i = 0; i < ri1; ++i) {
+          // Copy column ri of U into u
+          kernel_column_to_vector<Dtype><<<CAFFE_GET_BLOCKS(m),
+              CAFFE_CUDA_NUM_THREADS>>>(m, r, i, U, u);
+          Dtype* v = Vt + i*k;
+          caffe_gpu_gemm(CblasNoTrans, CblasNoTrans, m, k, 1, -(Dtype)hostW[i], u, v,
+              (Dtype)1., work);
+        }
+        // Recompute new singular vector
+        ri = ri1-1;
+      }
+      else {
+        // Deflate
+        caffe_gpu_gemm(CblasNoTrans, CblasNoTrans, m, k, 1, -(Dtype)hostW[ri],
+            u, v, (Dtype)1., work);
+      }
     }
     // Reconstruct D from rank r approximation
     caffe_gpu_memcpy(r*k*sizeof(Dtype), Vt, tmp);
     for (int i = 0; i < r; ++i) {
-      hostW[i] = std::max(hostW[i], (Dtype)EPSILON);
+      //hostW[i] = std::max(hostW[i], (Dtype)EPSILON);
       caffe_gpu_scal(k, hostW[i], tmp + i*k);
     }
     caffe_gpu_gemm(CblasNoTrans, CblasNoTrans, m, k, r, (Dtype)1., U, tmp,
@@ -181,8 +235,14 @@ void DictionaryLayer<Dtype>::fast_preprocess_gpu() {
     caffe_gpu_memcpy(r*k*sizeof(Dtype), Vt, Vt_sn2);
     caffe_gpu_memcpy(r*k*sizeof(Dtype), Vt, Vt_s2);
     for (int i = 0; i < r; ++i) {
-      caffe_gpu_scal(k, (Dtype)1./(hostW[i]*hostW[i]), Vt_sn2 + i*k);
-      caffe_gpu_scal(k, hostW[i]*hostW[i], Vt_s2 + i*k);
+      if (hostW[i] > EPSILON) {
+        caffe_gpu_scal(k, (Dtype)1./(hostW[i]*hostW[i]), Vt_sn2 + i*k);
+        caffe_gpu_scal(k, hostW[i]*hostW[i], Vt_s2 + i*k);
+      }
+      else {
+        caffe_gpu_scal(k, (Dtype)0., Vt_sn2 + i*k);
+        caffe_gpu_scal(k, (Dtype)0., Vt_s2 + i*k);
+      }
     }
     caffe_gpu_gemm(CblasTrans, CblasNoTrans, k, k, r, (Dtype)1., Vt, Vt_sn2,
         (Dtype)0., tmp);
@@ -196,62 +256,38 @@ void DictionaryLayer<Dtype>::fast_preprocess_gpu() {
 template <typename Dtype>
 void DictionaryLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-//  Forward_cpu(bottom, top);
+  //Forward_cpu(bottom, top);
 
   // Perform normalization and decomposition (if necessary)
   if (first_time_ || this->phase_ == TEST) {
     forward_preprocess_cpu();
     first_time_ = false;
-  } else
+  }
+  else
     fast_preprocess_gpu();
   // Perform sparse coding (and optionally dictionary learning) on each input vector
-  const Dtype* D = this->blobs_[0]->cpu_data();
-  const Dtype* Vt = this->blobs_[bias_idx_ + 2]->cpu_data();
-  const Dtype* Vt_s2 = this->blobs_[bias_idx_ + 3]->cpu_data();
+  const Dtype* D = this->blobs_[0]->gpu_data();
+  const Dtype* Vt = this->blobs_[bias_idx_ + 2]->gpu_data();
+  const Dtype* Vt_s2 = this->blobs_[bias_idx_ + 3]->gpu_data();
   for (int i = 0; i < top.size()/2; ++i) {
-    const Dtype* bottom_data = bottom[i]->cpu_data();
-    Dtype* top_data = top[2*i]->mutable_cpu_data();
+    const Dtype* bottom_data = bottom[i]->gpu_data();
+    Dtype* top_data = top[2*i]->mutable_gpu_data();
     double loss = 0.;
     //LOG(INFO) << "Input norm = " << sqrt(caffe_cpu_dot<Dtype>(bottom[i]->count(),
     //    bottom_data, bottom_data)/bottom[i]->count());
     for (int n = 0; n < this->num_; ++n) {
       // Perform forward sparse coding
-      loss += this->forward_cpu_sparse_coding(bottom_data + bottom[i]->offset(n),
+      loss += this->forward_gpu_sparse_coding(bottom_data + bottom[i]->offset(n),
           D, Vt, Vt_s2, top_data + top[2*i]->offset(n));
       if (this->bias_term_) {
-        const Dtype* bias = this->blobs_[bias_idx_]->cpu_data();
-        this->forward_cpu_bias(top_data + top[i]->offset(n), bias);
+        const Dtype* bias = this->blobs_[bias_idx_]->gpu_data();
+        this->forward_gpu_bias(top_data + top[i]->offset(n), bias);
       }
     }
     // Put objective value in second output
     top_data = top[2*i+1]->mutable_cpu_data();
     *top_data = Dtype(loss/num_);
   }
-
-
-//  // Perform normalization and decomposition (if necessary)
-//  forward_preprocess_cpu();
-//  // Perform sparse coding (and optionally dictionary learning) on each input vector
-//  const Dtype* D = this->blobs_[0]->gpu_data();
-//  const Dtype* Vt = this->blobs_[bias_idx_ + 2]->gpu_data();
-//  const Dtype* Vt_s2 = this->blobs_[bias_idx_ + 3]->gpu_data();
-//  for (int i = 0; i < top.size()/2; ++i) {
-//    const Dtype* bottom_data = bottom[i]->gpu_data();
-//    Dtype* top_data = top[2*i]->mutable_gpu_data();
-//    Dtype* loss = top[2*i+1]->mutable_gpu_data();
-//    caffe_gpu_set(1, (Dtype)0., loss);
-//    for (int n = 0; n < this->num_; ++n) {
-//      // Perform forward sparse coding
-//      this->forward_gpu_sparse_coding(bottom_data + bottom[i]->offset(n),
-//          D, Vt, Vt_s2, top_data + top[2*i]->offset(n), loss);
-//      if (this->bias_term_) {
-//        const Dtype* bias = this->blobs_[bias_idx_]->gpu_data();
-//        this->forward_gpu_bias(top_data + top[i]->offset(n), bias);
-//      }
-//    }
-//    // Scale objective value in second output
-//    caffe_gpu_scal(1, (Dtype)1./(Dtype)(num_*conv_out_spatial_dim_), loss);
-//  }
 }
 
 // A is mxk, B is kxm
@@ -291,9 +327,9 @@ __global__ void kernel_hard_threshold(int n, Dtype lambda, Dtype* vec_alpha) {
 // Perform sparse coding on the GPU, estimate the loss and add it to the
 // previous loss value
 template <typename Dtype>
-void DictionaryLayer<Dtype>::forward_gpu_sparse_coding(const Dtype* input,
+double DictionaryLayer<Dtype>::forward_gpu_sparse_coding(const Dtype* input,
       const Dtype* D, const Dtype* Vt, const Dtype *Vt_s2, Dtype* output,
-      Dtype* loss, bool skip_im2col) {
+      bool skip_im2col) {
   const Dtype* col_buff = input;
   if (!is_1x1_) {
     if (!skip_im2col) {
@@ -345,6 +381,8 @@ void DictionaryLayer<Dtype>::forward_gpu_sparse_coding(const Dtype* input,
   // Sparse codes are in pixel-first order, we need to transpose them so they
   // are in channel-first order
   transpose_gpu(conv_out_spatial_dim_, num_output_, sparse_codes, output);
+
+  return 0.;
 }
 
 template <typename Dtype>
@@ -394,18 +432,103 @@ void DictionaryLayer<Dtype>::compute_Cx_gpu(int k, int r, const Dtype* w,
   caffe_gpu_gemv<Dtype>(CblasTrans, r, k, (Dtype)1., Vt, tmp, (Dtype)1., Cx);
 }
 
+// Perform one step of CGD in a single kernel
+template <typename Dtype>
+__global__ void kernel_step_cg(int k, Dtype* w, Dtype* p, Dtype* r,
+      Dtype* x, Dtype* ret_norm_r) {
+  __shared__ Dtype prev_norm_r;
+  __shared__ Dtype dot_p_w[1024];
+  __shared__ Dtype norm_r[1024];
+  if (threadIdx.x == 0)
+    prev_norm_r = *ret_norm_r;
+  // Compute dot_p_w
+  dot_p_w[threadIdx.x] = (Dtype)0.;
+  CUDA_KERNEL_LOOP(j, k) {
+    dot_p_w[threadIdx.x] += w[j]*p[j];
+  }
+  __syncthreads();
+  // Reduce sum and leave result in dot_p_w[0]
+  if (threadIdx.x < 512) dot_p_w[threadIdx.x] += dot_p_w[threadIdx.x + 512];
+  __syncthreads();
+  if (threadIdx.x < 256) dot_p_w[threadIdx.x] += dot_p_w[threadIdx.x + 256];
+  __syncthreads();
+  if (threadIdx.x < 128) dot_p_w[threadIdx.x] += dot_p_w[threadIdx.x + 128];
+  __syncthreads();
+  if (threadIdx.x < 64) dot_p_w[threadIdx.x] += dot_p_w[threadIdx.x + 64];
+  __syncthreads();
+  if (threadIdx.x < 32) dot_p_w[threadIdx.x] += dot_p_w[threadIdx.x + 32];
+  __syncthreads();
+  if (threadIdx.x < 16) dot_p_w[threadIdx.x] += dot_p_w[threadIdx.x + 16];
+  __syncthreads();
+  if (threadIdx.x < 8) dot_p_w[threadIdx.x] += dot_p_w[threadIdx.x + 8];
+  __syncthreads();
+  if (threadIdx.x < 4) dot_p_w[threadIdx.x] += dot_p_w[threadIdx.x + 4];
+  __syncthreads();
+  if (threadIdx.x < 2) dot_p_w[threadIdx.x] += dot_p_w[threadIdx.x + 2];
+  __syncthreads();
+  if (threadIdx.x < 1) dot_p_w[threadIdx.x] += dot_p_w[threadIdx.x + 1];
+  __syncthreads();
+  // Compute alpha
+  Dtype alpha = prev_norm_r / dot_p_w[0];
+  // Update x and r
+  CUDA_KERNEL_LOOP(j, k) {
+    x[j] += alpha*p[j];
+    r[j] -= alpha*w[j];
+  }
+  __syncthreads();
+  // Compute norm of r
+  norm_r[threadIdx.x] = (Dtype)0.;
+  CUDA_KERNEL_LOOP(j, k) {
+    norm_r[threadIdx.x] += r[j]*r[j];
+  }
+  // Reduce sum and leave result in norm_r[0]
+  if (threadIdx.x < 512) norm_r[threadIdx.x] += norm_r[threadIdx.x + 512];
+  __syncthreads();
+  if (threadIdx.x < 256) norm_r[threadIdx.x] += norm_r[threadIdx.x + 256];
+  __syncthreads();
+  if (threadIdx.x < 128) norm_r[threadIdx.x] += norm_r[threadIdx.x + 128];
+  __syncthreads();
+  if (threadIdx.x < 64) norm_r[threadIdx.x] += norm_r[threadIdx.x + 64];
+  __syncthreads();
+  if (threadIdx.x < 32) norm_r[threadIdx.x] += norm_r[threadIdx.x + 32];
+  __syncthreads();
+  if (threadIdx.x < 16) norm_r[threadIdx.x] += norm_r[threadIdx.x + 16];
+  __syncthreads();
+  if (threadIdx.x < 8) norm_r[threadIdx.x] += norm_r[threadIdx.x + 8];
+  __syncthreads();
+  if (threadIdx.x < 4) norm_r[threadIdx.x] += norm_r[threadIdx.x + 4];
+  __syncthreads();
+  if (threadIdx.x < 2) norm_r[threadIdx.x] += norm_r[threadIdx.x + 2];
+  __syncthreads();
+  if (threadIdx.x < 1) norm_r[threadIdx.x] += norm_r[threadIdx.x + 1];
+  __syncthreads();
+  // Compute beta
+  Dtype beta = norm_r[0] / prev_norm_r;
+  // Update p
+  CUDA_KERNEL_LOOP(j, k) {
+    p[j] = r[j] + beta*p[j];
+  }
+  // Return new norm of r
+  if (threadIdx.x == 0)
+    *ret_norm_r = norm_r[0];
+}
+
 template <typename Dtype>
 void DictionaryLayer<Dtype>::conjugate_gradient_gpu(int k, int r,
       const Dtype* weights, const Dtype* Vt, const Dtype* Vt2, const Dtype* d,
       Dtype* x, int num_iter, Dtype* temp_p, Dtype* temp_r, Dtype* temp_w,
       Dtype* tmp) {
+  // Temporay scalar variables on GPU
+  thrust::device_ptr<Dtype> dot_p_w(tmp++);
+  thrust::device_ptr<Dtype> norm_r(tmp++);
   // Initialize the residual
   compute_Cx_gpu(k, r, weights, Vt, Vt2, x, tmp, temp_r);
   caffe_gpu_sub(k, d, temp_r, temp_r);
   // Compute norm of the residual
-  Dtype prev_norm_r = (Dtype)0.;
-  caffe_gpu_dot<Dtype>(k, temp_r, temp_r, &prev_norm_r);
-  if (fabs(prev_norm_r) < EPSILON) {
+  cublasSetPointerMode(Caffe::cublas_handle(), CUBLAS_POINTER_MODE_DEVICE);
+  caffe_gpu_dot<Dtype>(k, temp_r, temp_r, norm_r.get());
+  cublasSetPointerMode(Caffe::cublas_handle(), CUBLAS_POINTER_MODE_HOST);
+  if (fabs(*norm_r) < EPSILON) {
     return;   // Accept initial solution
   }
   // Initialize the descent direction
@@ -415,24 +538,19 @@ void DictionaryLayer<Dtype>::conjugate_gradient_gpu(int k, int r,
   {
     // w = C * p
     compute_Cx_gpu(k, r, weights, Vt, Vt2, temp_p, tmp, temp_w);
-    Dtype dot_p_w = (Dtype)0.;
-    caffe_gpu_dot<Dtype>(k, temp_p, temp_w, &dot_p_w);
-    Dtype alpha = prev_norm_r / dot_p_w;
-    CHECK(!isnan(alpha));
-    // x = x + alpha*p
-    caffe_gpu_axpy<Dtype>(k, alpha, temp_p, x);
-    // r = r - alpha*w
-    caffe_gpu_axpy<Dtype>(k, -alpha, temp_w, temp_r);
-    // Compute norm of new residual
-    Dtype norm_r = (Dtype)0.;
-    caffe_gpu_dot<Dtype>(k, temp_r, temp_r, &norm_r);
-    // Compute beta
-    Dtype beta = norm_r / prev_norm_r;
-    CHECK(!isnan(beta));
-    // p = r + beta*p
-    caffe_gpu_axpby<Dtype>(k, (Dtype)1., temp_r, beta, temp_p);
-    prev_norm_r = norm_r;
-    if (fabs(prev_norm_r) < EPSILON) {
+    // Invoke kernel that does
+    //   dot_p_w = sum_j(p[j]*w[j])
+    //   alpha = prev_norm_r / dot_p_w;
+    //   x = x + alpha*p
+    //   r = r - alpha*w
+    //   norm_r = sum_j(r[j]*r[j])
+    //   beta = norm_r / prev_norm_r
+    //   p = r + beta*p
+    // and returns norm_r
+    // Our kernel only has 1 block to allow thread synchronization
+    kernel_step_cg<Dtype><<<1, 1024>>>(k, temp_w, temp_p,
+        temp_r, x, norm_r.get());
+    if (fabs(*norm_r) < EPSILON) {
       return;
     }
   }
