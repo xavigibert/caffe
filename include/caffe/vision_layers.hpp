@@ -379,6 +379,8 @@ class DictionaryLayer : public Layer<Dtype> {
       Dtype etha, Dtype* tmp1, Dtype* tmp2, Dtype* D_diff);
   void backward_cpu_gemm(const Dtype* mod_alpha_diff, const Dtype* D,
       Dtype* input);
+  void backward_cpu_optimize(const Dtype* alpha, const Dtype* D, const Dtype* x,
+      Dtype etha, Dtype* dl_dx);
   void backward_cpu_bias(Dtype* bias, const Dtype* input);
 
 #ifndef CPU_ONLY
@@ -404,6 +406,8 @@ class DictionaryLayer : public Layer<Dtype> {
       Dtype etha, Dtype* tmp1, Dtype* tmp2, Dtype* D_diff);
   void backward_gpu_gemm(const Dtype* mod_alpha_diff, const Dtype* D,
       Dtype* input);
+  void backward_gpu_optimize(const Dtype* alpha, const Dtype* D, const Dtype* x,
+      Dtype etha, Dtype* dl_dx);
   void backward_gpu_bias(Dtype* bias, const Dtype* input);
 #endif
 

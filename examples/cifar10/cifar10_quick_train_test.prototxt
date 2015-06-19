@@ -167,14 +167,14 @@ layer {
   top: "dict1_loss"
   propagate_down: true
   param {
-    lr_mult: 1
+    lr_mult: 0.1
   }
   param {
     lr_mult: 2
   }
   dictionary_param {
-    num_output: 96
-    rank: 48
+    num_output: 256
+    rank: 64
     kernel_size: 8
     stride: 1
     weight_filler {
@@ -182,17 +182,17 @@ layer {
       std: 0.1
     }
     lambda: 0.002
-    etha: 0.05
+    etha: 0.0001
     num_iter_cg: 8
     num_iter_irls: 8
   }
 }
-layer {
-  name: "relu4"
-  type: "ReLU"
-  bottom: "dict1"
-  top: "dict1"
-}
+#layer {
+#  name: "relu4"
+#  type: "ReLU"
+#  bottom: "dict1"
+#  top: "dict1"
+#}
 layer {
   name: "relu3_aux"
   type: "ReLU"

@@ -519,7 +519,6 @@ void DictionaryLayer<Dtype>::conjugate_gradient_gpu(int k, int r,
       Dtype* x, int num_iter, Dtype* temp_p, Dtype* temp_r, Dtype* temp_w,
       Dtype* tmp) {
   // Temporay scalar variables on GPU
-  thrust::device_ptr<Dtype> dot_p_w(tmp++);
   thrust::device_ptr<Dtype> norm_r(tmp++);
   // Initialize the residual
   compute_Cx_gpu(k, r, weights, Vt, Vt2, x, tmp, temp_r);
@@ -626,6 +625,12 @@ void DictionaryLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
           Dtype* Dflag = this->blobs_[bias_idx_ + 1]->mutable_cpu_data();
           *Dflag = (Dtype)1.;
         }
+        // gradient of reconstruction error w.r.t bottom data, if necessary
+        if (propagate_down[idx]) {
+          this->backward_gpu_optimize(alpha, D,
+              bottom_data + bottom[idx]->offset(n),
+              (Dtype)(etha_ * this->layer_param_.param(0).lr_mult()), dl_dx);
+        }
       }
     }
   }
@@ -658,12 +663,14 @@ void DictionaryLayer<Dtype>::dict_gpu_backprop(const Dtype* x, const Dtype* dl_d
 
 }
 
+// Gradient that decreases reconstruction loss on dictionary
 template <typename Dtype>
 void DictionaryLayer<Dtype>::dict_gpu_optimize(const Dtype* x,
     const Dtype* alpha, const Dtype* D, Dtype etha, Dtype* tmp1, Dtype* tmp2,
     Dtype* D_diff) {
   if (etha == (Dtype)0.)
     return;
+  // Do dl/dD += etha*(D*alpha-x)*alpha^T
   int m = kernel_dim_;
   int k = num_output_;
   caffe_copy(m, x, tmp1);
@@ -671,6 +678,20 @@ void DictionaryLayer<Dtype>::dict_gpu_optimize(const Dtype* x,
       (Dtype)1., D, alpha, -(Dtype)1., tmp1);
   caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, m, k, 1,
       etha, tmp1, alpha, (Dtype)1., D_diff);
+}
+
+// Compute backpropagated reconstruction loss and add it to dl_dx
+template <typename Dtype>
+void DictionaryLayer<Dtype>::backward_gpu_optimize(const Dtype* alpha,
+    const Dtype* D, const Dtype* x, Dtype etha, Dtype* dl_dx) {
+  if (etha == (Dtype)0.)
+    return;
+  // Do dl/dx += etha*(x-D*alpha)
+  int m = kernel_dim_;
+  int k = num_output_;
+  caffe_gpu_axpy(m, etha, x, dl_dx);
+  caffe_gpu_gemm(CblasNoTrans, CblasNoTrans, m, 1, k, -etha, D, alpha,
+      (Dtype)1., dl_dx);
 }
 
 template <typename Dtype>
