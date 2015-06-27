@@ -372,7 +372,7 @@ int search() {
   // Initial tuning (range 1)
   TunableLogRange range_lr_mult(0.05, 0.2, 3);
   TunableLogRange range_rank(16, 128, 4);
-  TunableLogRange range_num_output(32, 256, 6);
+  TunableLogRange range_num_output(32, 256, 7);
   TunableLogRange range_lambda(0.001, 0.01, 5);
   TunableLogRange range_etha_rec(0.00002, 0.002, 3);
 
