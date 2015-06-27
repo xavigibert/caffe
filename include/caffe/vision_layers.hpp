@@ -345,6 +345,7 @@ class DictionaryLayer : public Layer<Dtype> {
   float soft_th_;
   float etha_rec_;
   float etha_rec_bp_;
+  float etha_lr_;
   float etha_lr_bp_;
   int rank_;
   bool orthogonalize_;

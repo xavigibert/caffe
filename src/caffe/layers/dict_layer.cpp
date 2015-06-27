@@ -118,6 +118,7 @@ void DictionaryLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   this->etha_rec_ = this->layer_param_.dictionary_param().etha_rec();
   this->etha_rec_bp_ = this->layer_param_.dictionary_param().etha_rec_bp();
   this->etha_lr_bp_ = this->layer_param_.dictionary_param().etha_lr_bp();
+  this->etha_lr_ = 0.f;
   // Handle the parameters: dictionary (weights) and biases.
   // - blobs_[0] holds the dictionary (mxk)
   // - blobs_[1] holds the dictionary dirty flag (1x1)

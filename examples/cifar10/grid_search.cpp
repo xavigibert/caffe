@@ -370,11 +370,11 @@ int search() {
   // dictionary_param().etha_rec [0.0001 - 0.01] (5)
 
   // Initial tuning (range 1)
-//  TunableLogRange range_lr_mult(0.05, 0.2, 3);
-//  TunableLogRange range_rank(8, 128, 5);
-//  TunableLogRange range_num_output(32, 256, 6);
-//  TunableLogRange range_lambda(0.001, 0.01, 5);
-//  TunableLogRange range_etha_rec(0.00002, 0.0002, 5);
+  TunableLogRange range_lr_mult(0.05, 0.2, 3);
+  TunableLogRange range_rank(16, 128, 4);
+  TunableLogRange range_num_output(32, 256, 6);
+  TunableLogRange range_lambda(0.001, 0.01, 5);
+  TunableLogRange range_etha_rec(0.00002, 0.002, 3);
 
   // Refined tuning (range 2)
 //  TunableLogRange range_lr_mult(0.025, 0.1, 3);
@@ -383,17 +383,19 @@ int search() {
 //  TunableLogRange range_lambda(0.0025, 0.01, 3);
 //  TunableLogRange range_etha_rec(0.00002, 0.00002, 1);
 
-  TunableLogRange range_lr_mult(0.1, 0.1, 1);
-  TunableLogRange range_rank(128, 128, 1);
-  TunableLogRange range_num_output(256, 256, 1);
-  TunableLogRange range_lambda(0.005, 0.005, 1);
-  TunableLogRange range_etha_rec(0.00002, 0.00002, 1);
+//  TunableLogRange range_lr_mult(0.1, 0.1, 1);
+//  TunableLogRange range_rank(128, 128, 1);
+//  TunableLogRange range_num_output(256, 256, 1);
+//  TunableLogRange range_lambda(0.005, 0.005, 1);
+//  TunableLogRange range_etha_rec(0.00002, 0.00002, 1);
 
   int num_configs = range_lr_mult.steps() * range_rank.steps()
       * range_lambda.steps() * range_etha_rec.steps() * range_num_output.steps();
 
   // Reduce number of iterations
   solver_param.set_max_iter(1000);
+  solver_param.set_test_interval(1000);
+  solver_param.set_test_initialization(false);
 
   time_t timer;
   time(&timer);

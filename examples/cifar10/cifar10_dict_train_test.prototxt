@@ -1,4 +1,4 @@
-name: "CIFAR10_quick"
+name: "CIFAR10_dict"
 layer {
   name: "cifar"
   type: "Data"
