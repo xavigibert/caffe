@@ -115,7 +115,9 @@ void DictionaryLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   this->num_iter_irls_ = this->layer_param_.dictionary_param().num_iter_irls();
   CHECK_GT(this->num_iter_irls_, 0);
   this->soft_th_ = this->layer_param_.dictionary_param().soft_th();
-  this->etha_ = this->layer_param_.dictionary_param().etha();
+  this->etha_rec_ = this->layer_param_.dictionary_param().etha_rec();
+  this->etha_rec_bp_ = this->layer_param_.dictionary_param().etha_rec_bp();
+  this->etha_lr_bp_ = this->layer_param_.dictionary_param().etha_lr_bp();
   // Handle the parameters: dictionary (weights) and biases.
   // - blobs_[0] holds the dictionary (mxk)
   // - blobs_[1] holds the dictionary dirty flag (1x1)
@@ -180,6 +182,7 @@ void DictionaryLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   U_buffer_.Reshape(1, 1, m, r);
   Vt_sn2_buffer_.Reshape(1, 1, r, k);
   Ddagger_buffer_.Reshape(1, 1, k, m);
+  Dlow_rank_.Reshape(1, 1, k, m);
   // Initialize orthonormalization order of dictionary columns
   dict_order_.resize(k);
   for (int i = 0; i < k; ++i)
@@ -289,8 +292,12 @@ void DictionaryLayer<Dtype>::forward_preprocess_cpu() {
       W[i] = std::max(W[i], (Dtype)EPSILON);
       caffe_scal(k, W[i], tmp + i*k);
     }
+    Dtype* work = Ddagger_buffer_.mutable_cpu_data(); // mxk
+    memcpy(work, D, m*k*sizeof(Dtype));
+    Dtype* Dlr = Dlow_rank_.mutable_cpu_data();
     caffe_cpu_gemm(CblasNoTrans, CblasNoTrans, m, k, r, (Dtype)1., U, tmp,
         (Dtype)0., D);
+    caffe_sub(m*k, D, work, Dlr);   // Now Dlr contains the gradient
     // Precompute pseudoinverse of D
     Dtype* Ddagger = Ddagger_buffer_.mutable_cpu_data();
     Dtype* Vt_sn2 = Vt_sn2_buffer_.mutable_cpu_data();
@@ -422,8 +429,11 @@ void DictionaryLayer<Dtype>::fast_preprocess_cpu() {
       //W[i] = std::max(W[i], (Dtype)EPSILON);
       caffe_scal(k, W[i], tmp + i*k);
     }
+    Dtype* Dlr = Dlow_rank_.mutable_cpu_data();
+    memcpy(work, D, m*k*sizeof(Dtype));
     caffe_cpu_gemm(CblasNoTrans, CblasNoTrans, m, k, r, (Dtype)1., U, tmp,
         (Dtype)0., D);
+    caffe_sub(m*k, D, work, Dlr);   // Now Dlr contains the gradient
     // Precompute pseudoinverse of D
     Dtype* Ddagger = Ddagger_buffer_.mutable_cpu_data();
     Dtype* Vt_sn2 = Vt_sn2_buffer_.mutable_cpu_data();
@@ -440,6 +450,8 @@ void DictionaryLayer<Dtype>::fast_preprocess_cpu() {
         caffe_scal(k, (Dtype)0., Vt_s2 + i*k);
       }
     }
+    // For the purpose of computing the pseudoinverse, we are using D instead of
+    // Dlr, but Vt and Vt_sn2 are low-rank
     caffe_cpu_gemm(CblasTrans, CblasNoTrans, k, k, r, (Dtype)1., Vt, Vt_sn2,
         (Dtype)0., tmp);
     caffe_cpu_gemm(CblasNoTrans, CblasNoTrans, m, k, k, (Dtype)1., D, tmp,
@@ -461,6 +473,7 @@ void DictionaryLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     fast_preprocess_cpu();
   // Perform sparse coding (and optionally dictionary learning) on each input vector
   const Dtype* D = this->blobs_[0]->cpu_data();
+  //const Dtype* Dlr = this->Dlow_rank_.cpu_data();
   const Dtype* Vt = this->blobs_[bias_idx_ + 2]->cpu_data();
   const Dtype* Vt_s2 = this->blobs_[bias_idx_ + 3]->cpu_data();
   for (int i = 0; i < top.size()/2; ++i) {
@@ -742,6 +755,7 @@ template <typename Dtype>
 void DictionaryLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   const Dtype* D = this->blobs_[0]->cpu_data();
+  const Dtype* Dlr = this->Dlow_rank_.cpu_data();
   Dtype* D_diff = this->blobs_[0]->mutable_cpu_diff();
   if (this->param_propagate_down_[0]) {
     caffe_set(this->blobs_[0]->count(), Dtype(0), D_diff);
@@ -792,7 +806,7 @@ void DictionaryLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
               dl_dx, mod_alpha_diff, Ddagger, Vt, Vt_sn2, tmp1, tmp2, tmp3,
               D_diff);
           this->dict_cpu_optimize(bottom_data + bottom[idx]->offset(n), alpha,
-              D, (Dtype)etha_, tmp1, tmp2, D_diff);
+              D, Dlr, (Dtype)etha_rec_, (Dtype)etha_lr_, tmp1, tmp2, D_diff);
           // Mark dictionary as unnormalized
           is_dict_normalized_ = false;
           Dtype* Dflag = this->blobs_[bias_idx_ + 1]->mutable_cpu_data();
@@ -800,9 +814,9 @@ void DictionaryLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
         }
         // gradient of reconstruction error w.r.t bottom data, if necessary
         if (propagate_down[idx]) {
-          this->backward_cpu_optimize(alpha, D,
+          this->backward_cpu_optimize(alpha, D, Dlr,
               bottom_data + bottom[idx]->offset(n),
-              (Dtype)(etha_ * this->layer_param_.param(0).lr_mult()), dl_dx);
+              (Dtype)(etha_rec_bp_), (Dtype)(etha_lr_bp_), dl_dx);
         }
       }
     }
@@ -838,31 +852,43 @@ void DictionaryLayer<Dtype>::dict_cpu_backprop(const Dtype* x, const Dtype* dl_d
 // Gradient that decreases reconstruction loss on dictionary
 template <typename Dtype>
 void DictionaryLayer<Dtype>::dict_cpu_optimize(const Dtype* x,
-    const Dtype* alpha, const Dtype* D, Dtype etha, Dtype* tmp1, Dtype* tmp2,
-    Dtype* D_diff) {
-  if (etha == (Dtype)0.)
-    return;
+    const Dtype* alpha, const Dtype* D, const Dtype* Dlr, Dtype etha_rec,
+    Dtype etha_lr, Dtype* tmp1, Dtype* tmp2, Dtype* D_diff) {
   int m = kernel_dim_;
   int k = num_output_;
-  caffe_copy(m, x, tmp1);
-  caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, m, 1, k,
-      (Dtype)1., D, alpha, -(Dtype)1., tmp1);
-  caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, m, k, 1,
-      etha, tmp1, alpha, (Dtype)1., D_diff);
+  if (etha_rec != (Dtype)0.) {
+    // Do dl/dD += etha_rec*(D*alpha-x)*alpha^T
+    caffe_copy(m, x, tmp1);
+    caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, m, 1, k,
+        (Dtype)1., D, alpha, -(Dtype)1., tmp1);
+    caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, m, k, 1,
+        etha_rec, tmp1, alpha, (Dtype)1., D_diff);
+  }
+//  if (etha_lr != (Dtype)0.) {
+//    // Do dl/dD += etha_lr*(Dlr-D)
+//    caffe_axpy(m*k, etha_lr, Dlr, D_diff);
+//    caffe_axpy(m*k, -etha_lr, D, D_diff);
+//  }
 }
 
 // Compute backpropagated reconstruction loss and add it to dl_dx
 template <typename Dtype>
 void DictionaryLayer<Dtype>::backward_cpu_optimize(const Dtype* alpha,
-    const Dtype* D, const Dtype* x, Dtype etha, Dtype* dl_dx) {
-  if (etha == (Dtype)0.)
-    return;
-  // Do dl/dx += etha*(x-D*alpha)
+    const Dtype* D, const Dtype* Dlr, const Dtype* x, Dtype etha_rec,
+    Dtype etha_lr, Dtype* dl_dx) {
   int m = kernel_dim_;
   int k = num_output_;
-  caffe_axpy(m, etha, x, dl_dx);
-  caffe_cpu_gemm(CblasNoTrans, CblasNoTrans, m, 1, k, -etha, D, alpha,
-      (Dtype)1., dl_dx);
+  if (etha_rec != (Dtype)0.) {
+    // Do dl/dx += etha*(x-D*alpha)
+    caffe_axpy(m, etha_rec, x, dl_dx);
+    caffe_cpu_gemm(CblasNoTrans, CblasNoTrans, m, 1, k, -etha_rec, D, alpha,
+        (Dtype)1., dl_dx);
+  }
+  if (etha_lr != (Dtype)0.) {
+    // Do dl/dx += etha_lr*(D_lr)*alpha
+    caffe_cpu_gemm(CblasNoTrans, CblasNoTrans, m, 1, k, etha_lr, Dlr, alpha,
+        (Dtype)1., dl_dx);
+  }
 }
 
 template <typename Dtype>

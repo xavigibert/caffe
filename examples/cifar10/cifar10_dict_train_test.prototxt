@@ -76,9 +76,21 @@ layer {
   top: "pool1"
 }
 layer {
+  name: "norm1"
+  type: "LRN"
+  bottom: "pool1"
+  top: "norm1"
+  lrn_param {
+    local_size: 3
+    alpha: 5e-05
+    beta: 0.75
+    norm_region: WITHIN_CHANNEL
+  }
+}
+layer {
   name: "conv2"
   type: "Convolution"
-  bottom: "pool1"
+  bottom: "norm1"
   top: "conv2"
   param {
     lr_mult: 1
@@ -118,9 +130,21 @@ layer {
   }
 }
 layer {
+  name: "norm2"
+  type: "LRN"
+  bottom: "pool2"
+  top: "norm2"
+  lrn_param {
+    local_size: 3
+    alpha: 5e-05
+    beta: 0.75
+    norm_region: WITHIN_CHANNEL
+  }
+}
+layer {
   name: "conv3"
   type: "Convolution"
-  bottom: "pool2"
+  bottom: "norm2"
   top: "conv3"
   param {
     lr_mult: 1
@@ -142,55 +166,65 @@ layer {
     }
   }
 }
+#layer {
+#  name: "relu3"
+#  type: "ReLU"
+#  bottom: "conv3"
+#  top: "conv3"
+#}
+#layer {
+#  name: "pool3"
+#  type: "Pooling"
+#  bottom: "conv3"
+#  top: "conv3"
+#  pooling_param {
+#    pool: AVE
+#    kernel_size: 3
+#    stride: 2
+#  }
+#}
 layer {
-  name: "relu3"
-  type: "ReLU"
+  name: "dict1"
+  type: "Dictionary"
   bottom: "conv3"
-  top: "conv3"
-}
-layer {
-  name: "pool3"
-  type: "Pooling"
-  bottom: "conv3"
-  top: "pool3"
-  pooling_param {
-    pool: AVE
-    kernel_size: 3
-    stride: 2
-  }
-}
-layer {
-  name: "ip1"
-  type: "InnerProduct"
-  bottom: "pool3"
-  top: "ip1"
+  top: "dict1"
+  top: "dict1_loss"
+  propagate_down: true
   param {
-    lr_mult: 1
+    lr_mult: 0.1
   }
   param {
     lr_mult: 2
   }
-  inner_product_param {
-    num_output: 64
+  dictionary_param {
+    num_output: 256
+    rank: 128
+    kernel_size: 8
+    stride: 1
     weight_filler {
       type: "gaussian"
       std: 0.1
     }
-    bias_filler {
-      type: "constant"
-    }
+    lambda: 0.005
+#    etha_rec: 0.001
+#    etha_rec_bp: 0.00002
+    etha_rec: 0.00002
+    num_iter_cg: 8
+    num_iter_irls: 8
   }
 }
 layer {
   name: "ip2"
   type: "InnerProduct"
-  bottom: "ip1"
+  bottom: "dict1"
   top: "ip2"
   param {
     lr_mult: 1
+    #decay_mult: 250
   }
   param {
     lr_mult: 2
+    #decay_mult: 0
   }
   inner_product_param {
     num_output: 10
@@ -203,6 +237,34 @@ layer {
     }
   }
 }
+#layer {
+#  name: "dict2"
+#  type: "Dictionary"
+#  bottom: "ip2"
+#  top: "dict2"
+#  top: "dict2_loss"
+#  propagate_down: true
+#  param {
+#    lr_mult: 1
+#  }
+#  param {
+#    lr_mult: 2
+#  }
+#  dictionary_param {
+#    num_output: 10
+#    rank: 10
+#    kernel_size: 1
+#    stride: 1
+#    weight_filler {
+#      type: "gaussian"
+#      std: 0.1
+#    }
+#    lambda: 0.002
+#    etha: 0.001
+#    num_iter_cg: 8
+#    num_iter_irls: 8
+#  }
+#}
 layer {
   name: "accuracy"
   type: "Accuracy"
@@ -212,6 +274,9 @@ layer {
   include {
     phase: TEST
   }
+#  accuracy_param {
+#    ignore_label: -1
+#  }
 }
 layer {
   name: "loss"
@@ -219,4 +284,7 @@ layer {
   bottom: "ip2"
   bottom: "label"
   top: "loss"
+#  loss_param {
+#    ignore_label: -1
+#  }
 }

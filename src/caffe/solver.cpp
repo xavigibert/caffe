@@ -46,6 +46,8 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   LOG(INFO) << "Solver scaffolding done.";
   iter_ = 0;
   current_step_ = 0;
+  test_accuracy_ = (Dtype)0.;
+  test_loss_ = (Dtype)0.;
 }
 
 template <typename Dtype>
@@ -323,13 +325,18 @@ void Solver<Dtype>::Test(const int test_net_id) {
     LOG(INFO) << "    Test net output #" << i << ": " << output_name << " = "
         << mean_score << loss_msg_stream.str();
 
+    if (output_name == "accuracy")
+      test_accuracy_ = mean_score;
+    else if(output_name == "loss") {
+      test_loss_ = mean_score;
+    }
+
     // TEMPORARY CODE TO LOG LOSS OVER TIME
     int fd = open("loss_test.csv", O_CREAT|O_APPEND|O_WRONLY, 0600);
     char tmp_str[128];
     sprintf(tmp_str, "%d,%.8f\n", iter_, mean_score);
     write(fd, tmp_str, strlen(tmp_str));
     close(fd);
-
   }
 }
 

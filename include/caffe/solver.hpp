@@ -37,6 +37,10 @@ class Solver {
     return test_nets_;
   }
   int iter() { return iter_; }
+  // TEMPORARY CODE
+  Dtype test_accuracy() const { return test_accuracy_; }
+  Dtype test_loss() const { return test_loss_; }
+  // END OF TEMPORARY CODE
 
  protected:
   // Get the update value for the current iteration.
@@ -58,6 +62,10 @@ class Solver {
   int current_step_;
   shared_ptr<Net<Dtype> > net_;
   vector<shared_ptr<Net<Dtype> > > test_nets_;
+  // TEMPORARY CODE
+  Dtype test_accuracy_;
+  Dtype test_loss_;
+  // END OF TEMPORARY CODE
 
   DISABLE_COPY_AND_ASSIGN(Solver);
 };

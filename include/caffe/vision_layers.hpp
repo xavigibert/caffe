@@ -343,7 +343,9 @@ class DictionaryLayer : public Layer<Dtype> {
   int num_iter_cg_;
   int num_iter_irls_;
   float soft_th_;
-  float etha_;
+  float etha_rec_;
+  float etha_rec_bp_;
+  float etha_lr_bp_;
   int rank_;
   bool orthogonalize_;
 
@@ -376,11 +378,13 @@ class DictionaryLayer : public Layer<Dtype> {
       const Dtype* mod_alpha_diff, const Dtype* Dtdagger, const Dtype* Vt,
       const Dtype* Vt_sn2, Dtype* tmp1, Dtype* tmp2, Dtype* tmp3, Dtype* D_diff);
   void dict_cpu_optimize(const Dtype* x, const Dtype* alpha, const Dtype* D,
-      Dtype etha, Dtype* tmp1, Dtype* tmp2, Dtype* D_diff);
+      const Dtype* Dlr, Dtype etha_rec, Dtype etha_lr, Dtype* tmp1, Dtype* tmp2,
+      Dtype* D_diff);
   void backward_cpu_gemm(const Dtype* mod_alpha_diff, const Dtype* D,
       Dtype* input);
-  void backward_cpu_optimize(const Dtype* alpha, const Dtype* D, const Dtype* x,
-      Dtype etha, Dtype* dl_dx);
+  void backward_cpu_optimize(const Dtype* alpha, const Dtype* D,
+      const Dtype* Dlr, const Dtype* x, Dtype etha_rec, Dtype etha_lr,
+      Dtype* dl_dx);
   void backward_cpu_bias(Dtype* bias, const Dtype* input);
 
 #ifndef CPU_ONLY
@@ -396,18 +400,20 @@ class DictionaryLayer : public Layer<Dtype> {
   void forward_gpu_bias(Dtype* output, const Dtype* bias);
   void normalize_dictionary_gpu(int m, int k, Dtype* D);
   void transpose_gpu(int m, int k, const Dtype* A, Dtype* B);
-  void add_objective_gpu(int m, int k, const Dtype* D, const Dtype* x,
-      const Dtype* alpha, Dtype* loss);
+  double objective_function_gpu(int m, int k, const Dtype* D, const Dtype* x,
+      const Dtype* alpha);
   // Backpropagation functions
   void dict_gpu_backprop(const Dtype* x, const Dtype* dl_dx,
       const Dtype* mod_alpha_diff, const Dtype* Dtdagger, const Dtype* Vt,
       const Dtype* Vt_sn2, Dtype* tmp1, Dtype* tmp2, Dtype* tmp3, Dtype* D_diff);
   void dict_gpu_optimize(const Dtype* x, const Dtype* alpha, const Dtype* D,
-      Dtype etha, Dtype* tmp1, Dtype* tmp2, Dtype* D_diff);
+      const Dtype* Dlr, Dtype etha_rec, Dtype etha_lr, Dtype* tmp1, Dtype* tmp2,
+      Dtype* D_diff);
   void backward_gpu_gemm(const Dtype* mod_alpha_diff, const Dtype* D,
       Dtype* input);
-  void backward_gpu_optimize(const Dtype* alpha, const Dtype* D, const Dtype* x,
-      Dtype etha, Dtype* dl_dx);
+  void backward_gpu_optimize(const Dtype* alpha, const Dtype* D,
+      const Dtype* Dlr, const Dtype* x, Dtype etha_rec, Dtype etha_lr,
+      Dtype* dl_dx);
   void backward_gpu_bias(Dtype* bias, const Dtype* input);
 #endif
 
@@ -458,6 +464,7 @@ class DictionaryLayer : public Layer<Dtype> {
   Blob<Dtype> U_buffer_;            // First r left singular vectors of D
   Blob<Dtype> Vt_sn2_buffer_;       // Vt premultiplied by S^(-2)
   Blob<Dtype> Ddagger_buffer_;      // Pseudoinverse of D^T
+  Blob<Dtype> Dlow_rank_;           // Low-rank approximate of D
 };
 
 /**

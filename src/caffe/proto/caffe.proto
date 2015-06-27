@@ -475,12 +475,15 @@ message DictionaryParameter {
   optional uint32 num_iter_irls = 17 [default = 8];
   // Rate at which dictionary gets initialized with data samples (each
   // sample is selected with a given probability)
-  optional float soft_th = 21 [default = 0.0];
-  // Learning rate for generative dictionary learning
-  optional float etha = 22 [default = 0.0];
-  optional uint32 rank = 23;   // Dictionary rank (default is num_output)
+  optional float soft_th = 18 [default = 0.0];
+  // Learning rate for generative dictionary learning (reconstruction error)
+  optional float etha_rec = 19 [default = 0.0];
+  optional float etha_rec_bp = 20 [default = 0.0];
+  // Learning rate for learning low rank dictionary (approximation error)
+  optional float etha_lr_bp = 21 [default = 0.0];
+  optional uint32 rank = 22;   // Dictionary rank (default is num_output)
   // If full-rank dictionary, make D columns orthogonal to save computation
-  optional bool orthogonalize = 24 [default = false];
+  optional bool orthogonalize = 23 [default = false];
 }
 
 message DataParameter {

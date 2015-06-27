@@ -226,8 +226,11 @@ void DictionaryLayer<Dtype>::fast_preprocess_gpu() {
       //hostW[i] = std::max(hostW[i], (Dtype)EPSILON);
       caffe_gpu_scal(k, hostW[i], tmp + i*k);
     }
+    Dtype* Dlr = Dlow_rank_.mutable_gpu_data();
+    caffe_gpu_memcpy(m*k*sizeof(Dtype), D, work);
     caffe_gpu_gemm(CblasNoTrans, CblasNoTrans, m, k, r, (Dtype)1., U, tmp,
         (Dtype)0., D);
+    caffe_gpu_sub(m*k, D, work, Dlr);   // Now Dlr contains the gradient
     // Precompute pseudoinverse of D
     Dtype* Ddagger = Ddagger_buffer_.mutable_gpu_data();
     Dtype* Vt_sn2 = Vt_sn2_buffer_.mutable_gpu_data();
@@ -267,6 +270,7 @@ void DictionaryLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     fast_preprocess_gpu();
   // Perform sparse coding (and optionally dictionary learning) on each input vector
   const Dtype* D = this->blobs_[0]->gpu_data();
+  //const Dtype* Dlr = this->Dlow_rank_.gpu_data();
   const Dtype* Vt = this->blobs_[bias_idx_ + 2]->gpu_data();
   const Dtype* Vt_s2 = this->blobs_[bias_idx_ + 3]->gpu_data();
   for (int i = 0; i < top.size()/2; ++i) {
@@ -347,6 +351,8 @@ double DictionaryLayer<Dtype>::forward_gpu_sparse_coding(const Dtype* input,
   Dtype* sparse_codes = sparse_codes_buffer_.mutable_gpu_data();
   Dtype* diag = tmp_buffer_.mutable_gpu_data() + std::max(k,m);
   Dtype* tmp = tmp_buffer_.mutable_gpu_data() + 2*std::max(k,m);
+  // Initialize loss
+  double loss = 0.;
   for (int i = 0; i < conv_out_spatial_dim_; ++i)
   {
     const Dtype* x = col_buff + i*m;  // Input sample
@@ -376,13 +382,13 @@ double DictionaryLayer<Dtype>::forward_gpu_sparse_coding(const Dtype* input,
     // Apply hard threshold to sparse codes
     kernel_hard_threshold<<<CAFFE_GET_BLOCKS(k), CAFFE_CUDA_NUM_THREADS>>>(
         k, (Dtype)lambda_, vec_alpha);
-    //add_objective_gpu(m, k, D, x, vec_alpha, loss);
+    loss += objective_function_gpu(m, k, D, x, vec_alpha);
   }
   // Sparse codes are in pixel-first order, we need to transpose them so they
   // are in channel-first order
   transpose_gpu(conv_out_spatial_dim_, num_output_, sparse_codes, output);
 
-  return 0.;
+  return loss/conv_out_spatial_dim_;;
 }
 
 template <typename Dtype>
@@ -393,14 +399,13 @@ void DictionaryLayer<Dtype>::forward_gpu_bias(Dtype* output,
 }
 
 template <typename Dtype>
-void DictionaryLayer<Dtype>::add_objective_gpu(int m, int k,
-        const Dtype* D, const Dtype* x, const Dtype* alpha,
-        Dtype* loss) {
+double DictionaryLayer<Dtype>::objective_function_gpu(int m, int k,
+        const Dtype* D, const Dtype* x, const Dtype* alpha) {
   // Compute objective function
   // Cost(alpha) = 0.5*||x_t-D*alpha||_2^2 + lambda*||alpha||_1
   Dtype* tmp = tmp_buffer_.mutable_gpu_data();
-  caffe_gpu_memcpy(m, x, tmp);
-  caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, m, 1, k,
+  caffe_gpu_memcpy(m*sizeof(Dtype), x, tmp);
+  caffe_gpu_gemv<Dtype>(CblasNoTrans, m, k,
                         (Dtype)(-1.), D, alpha,
                         (Dtype)1., tmp);
   Dtype cost = (Dtype)0.;
@@ -417,7 +422,7 @@ void DictionaryLayer<Dtype>::add_objective_gpu(int m, int k,
   //caffe_gpu_add<Dtype>(1, cost, loss, loss);
   cost = 0.5 * cost + lambda_ * asum;
   //LOG(INFO) << "COST = " << cost;
-  caffe_gpu_add_scalar(1, cost, loss);
+  return cost;
 }
 
 // Compute C * x = w .* x + V * Vt2 * x
@@ -569,6 +574,7 @@ void DictionaryLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
 //  Backward_cpu(top, propagate_down, bottom);
   const Dtype* D = this->blobs_[0]->gpu_data();
+  const Dtype* Dlr = this->Dlow_rank_.gpu_data();
   Dtype* D_diff = this->blobs_[0]->mutable_gpu_diff();
   if (this->param_propagate_down_[0]) {
     caffe_gpu_set(this->blobs_[0]->count(), Dtype(0), D_diff);
@@ -619,7 +625,7 @@ void DictionaryLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
               dl_dx, mod_alpha_diff, Ddagger, Vt, Vt_sn2, tmp1, tmp2, tmp3,
               D_diff);
           this->dict_gpu_optimize(bottom_data + bottom[idx]->offset(n), alpha,
-              D, (Dtype)etha_, tmp1, tmp2, D_diff);
+              D, Dlr, (Dtype)etha_rec_, (Dtype)etha_lr_, tmp1, tmp2, D_diff);
           // Mark dictionary as unnormalized
           is_dict_normalized_ = false;
           Dtype* Dflag = this->blobs_[bias_idx_ + 1]->mutable_cpu_data();
@@ -627,9 +633,9 @@ void DictionaryLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
         }
         // gradient of reconstruction error w.r.t bottom data, if necessary
         if (propagate_down[idx]) {
-          this->backward_gpu_optimize(alpha, D,
+          this->backward_gpu_optimize(alpha, D, Dlr,
               bottom_data + bottom[idx]->offset(n),
-              (Dtype)(etha_ * this->layer_param_.param(0).lr_mult()), dl_dx);
+              (Dtype)(etha_rec_bp_), (Dtype)(etha_lr_bp_), dl_dx);
         }
       }
     }
@@ -666,32 +672,43 @@ void DictionaryLayer<Dtype>::dict_gpu_backprop(const Dtype* x, const Dtype* dl_d
 // Gradient that decreases reconstruction loss on dictionary
 template <typename Dtype>
 void DictionaryLayer<Dtype>::dict_gpu_optimize(const Dtype* x,
-    const Dtype* alpha, const Dtype* D, Dtype etha, Dtype* tmp1, Dtype* tmp2,
-    Dtype* D_diff) {
-  if (etha == (Dtype)0.)
-    return;
-  // Do dl/dD += etha*(D*alpha-x)*alpha^T
+    const Dtype* alpha, const Dtype* D, const Dtype* Dlr, Dtype etha_rec,
+    Dtype etha_lr, Dtype* tmp1, Dtype* tmp2, Dtype* D_diff) {
   int m = kernel_dim_;
   int k = num_output_;
-  caffe_copy(m, x, tmp1);
-  caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, m, 1, k,
-      (Dtype)1., D, alpha, -(Dtype)1., tmp1);
-  caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, m, k, 1,
-      etha, tmp1, alpha, (Dtype)1., D_diff);
+  if (etha_rec != (Dtype)0.) {
+    // Do dl/dD += etha_rec*(D*alpha-x)*alpha^T
+    caffe_copy(m, x, tmp1);
+    caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, m, 1, k,
+        (Dtype)1., D, alpha, -(Dtype)1., tmp1);
+    caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, m, k, 1,
+        etha_rec, tmp1, alpha, (Dtype)1., D_diff);
+  }
+//  if (etha_lr != (Dtype)0.) {
+//    // Do dl/dD += etha_lr*(Dlr-D)
+//    caffe_gpu_axpy(m*k, etha_lr, Dlr, D_diff);
+//    caffe_gpu_axpy(m*k, -etha_lr, D, D_diff);
+//  }
 }
 
 // Compute backpropagated reconstruction loss and add it to dl_dx
 template <typename Dtype>
 void DictionaryLayer<Dtype>::backward_gpu_optimize(const Dtype* alpha,
-    const Dtype* D, const Dtype* x, Dtype etha, Dtype* dl_dx) {
-  if (etha == (Dtype)0.)
-    return;
-  // Do dl/dx += etha*(x-D*alpha)
+    const Dtype* D, const Dtype* Dlr, const Dtype* x, Dtype etha_rec,
+    Dtype etha_lr, Dtype* dl_dx) {
   int m = kernel_dim_;
   int k = num_output_;
-  caffe_gpu_axpy(m, etha, x, dl_dx);
-  caffe_gpu_gemm(CblasNoTrans, CblasNoTrans, m, 1, k, -etha, D, alpha,
-      (Dtype)1., dl_dx);
+  if (etha_rec != (Dtype)0.) {
+    // Do dl/dx += etha_rec*(x-D*alpha)
+    caffe_gpu_axpy(m, etha_rec, x, dl_dx);
+    caffe_gpu_gemm(CblasNoTrans, CblasNoTrans, m, 1, k, -etha_rec, D, alpha,
+        (Dtype)1., dl_dx);
+  }
+  if (etha_lr != (Dtype)0.) {
+    // Do dl/dx += etha_lr*(D_lr)*alpha
+    caffe_gpu_gemm(CblasNoTrans, CblasNoTrans, m, 1, k, etha_lr, Dlr, alpha,
+        (Dtype)1., dl_dx);
+  }
 }
 
 template <typename Dtype>
