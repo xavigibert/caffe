@@ -15,6 +15,46 @@
 #include <fcntl.h>
 #include <opencv2/core/core.hpp>
 
+// TEMPORARY DEBUG CODE
+
+#include <sys/stat.h>
+#include <fcntl.h>
+
+static void save_to_matlab(const char* fname, const double* ptr, int m, int k) {
+  mode_t mode = S_IRUSR | S_IWUSR;
+  int fd = open(fname, O_WRONLY | O_CREAT | O_TRUNC, mode);
+  CHECK_GE(fd, 0);
+  int s = sizeof(double);
+  write(fd, (char*)&s, sizeof(int));
+  write(fd, (char*)&m, sizeof(int));
+  write(fd, (char*)&k, sizeof(int));
+  write(fd, (const char*)ptr, m*k*sizeof(double));
+  close(fd);
+}
+
+static void save_to_matlab(const char* fname, const float* ptr, int m, int k) {
+  mode_t mode = S_IRUSR | S_IWUSR;
+  int fd = open(fname, O_WRONLY | O_CREAT | O_TRUNC, mode);
+  CHECK_GE(fd, 0);
+  int s = sizeof(float);
+  write(fd, (char*)&s, sizeof(int));
+  write(fd, (char*)&m, sizeof(int));
+  write(fd, (char*)&k, sizeof(int));
+  write(fd, (const char*)ptr, m*k*sizeof(float));
+  close(fd);
+}
+
+static void save_to_matlab(const char* fname, cv::Mat M) {
+  if (M.type() == CV_32FC1)
+    save_to_matlab(fname, M.ptr<float>(), M.rows, M.cols);
+  else if (M.type() == CV_64FC1)
+    save_to_matlab(fname, M.ptr<double>(), M.rows, M.cols);
+  else
+    LOG(FATAL) << "Invalid type";
+}
+
+// END TEMPORARY CODE
+
 using caffe::Blob;
 using caffe::Caffe;
 using caffe::Net;
@@ -37,6 +77,9 @@ DEFINE_string(weights, "",
     "Cannot be set simultaneously with snapshot.");
 DEFINE_int32(iterations, 50,
     "The number of iterations to run.");
+DEFINE_int32(initdict, -1,
+    "The strategy used to reinitialize dictionary layers. "
+    "(0 use training samples for all dicts, 1 for all except first, ...).");
 
 // A simple registry for caffe commands.
 typedef int (*BrewFunction)();
@@ -98,6 +141,87 @@ void CopyLayers(caffe::Solver<float>* solver, const std::string& model_list) {
   }
 }
 
+void GenerateInitialDictionaries(caffe::Solver<float>* solver,
+    std::vector<boost::shared_ptr<caffe::Blob<float> > >& initial_dicts,
+    std::vector<int>& layer_ids) {
+  // Enumerate dictionary layers in training network
+  layer_ids.clear();
+  caffe::Net<float>* net = solver->net().get();
+  CHECK_EQ(net->layers().size(), net->bottom_vecs().size());
+  for (int i = 0; i < net->layers().size(); ++i) {
+    caffe::DictionaryLayer<float>* dict_layer =
+        dynamic_cast<caffe::DictionaryLayer<float>*>(net->layers()[i].get());
+    if (dict_layer != NULL)
+      layer_ids.push_back(i);
+  }
+  // Allocate container for dictionaries
+  initial_dicts.resize(layer_ids.size());
+  for (int i = 0; i < layer_ids.size(); ++i) {
+    caffe::DictionaryLayer<float>* layer =
+        dynamic_cast<caffe::DictionaryLayer<float>*>(net->layers()[layer_ids[i]].get());
+    LOG(INFO) << "Layer name: " << layer->layer_param().name();
+    int k = layer->num_output();
+    int m = layer->kernel_dim();
+    std::vector<int> shape = layer->blobs()[0]->shape();
+    initial_dicts[i].reset(new caffe::Blob<float>(shape));
+    int k1 = shape[0];
+    int m1 = shape[1] * shape[2] * shape[3];
+    CHECK_EQ(k, k1);
+    CHECK_EQ(m, m1);
+    LOG(INFO) << "mxk = " << m << "x" << k;
+  }
+  // Run network to generate initial dictionary atoms
+  int iter = 0;
+  bool done = false;
+  while (!done) {
+    done = true;
+    std::vector<caffe::Blob<float>*> bottom_vec;  // Dummy bottom vector
+    float iter_loss;
+    net->Forward(bottom_vec, &iter_loss);
+    for (int i = FLAGS_initdict; i < layer_ids.size(); ++i) {
+      std::vector<int> shape = initial_dicts[i]->shape();
+      int k = shape[0];
+      int m = shape[1] * shape[2] * shape[3];
+      if (iter < k) {
+        // Transfer the first sample of the minibatch to dictionary
+        CHECK_EQ(net->bottom_vecs().size(), net->layers().size());
+        const caffe::Blob<float>* bottom_blob = net->bottom_vecs()[layer_ids[i]][0];
+        CHECK_GE(bottom_blob->count(), m);
+        const float* x = bottom_blob->cpu_data();
+        // Compute norm of x
+        float norm_x = 0.f;
+        for (int j = 0; j < m; ++j)
+          norm_x += x[j]*x[j];
+        norm_x = sqrt(norm_x);
+        float* D = initial_dicts[i]->mutable_cpu_data();
+        for (int j = 0; j < m; ++j) {
+          D[iter+j*k] = x[j] / norm_x;
+        }
+        done = false;
+      }
+    }
+    ++iter;
+  }
+}
+
+// Initialize dictionary with training data (select 1 first sample of each batch)
+void InitializeDictionaries(caffe::Solver<float>* solver,
+    std::vector<boost::shared_ptr<caffe::Blob<float> > >& initial_dicts,
+    std::vector<int>& layer_ids) {
+  caffe::Net<float>* net = solver->net().get();
+  for (int i = FLAGS_initdict; i < layer_ids.size(); ++i) {
+    caffe::DictionaryLayer<float>* layer =
+        dynamic_cast<caffe::DictionaryLayer<float>*>(net->layers()[layer_ids[i]].get());
+    CHECK(layer);
+    CHECK_EQ(layer->blobs()[0]->count(), initial_dicts[i]->count());
+    CHECK_EQ(layer->blobs()[0]->count(), 4096*64);
+    save_to_matlab("mat_D0.bin", layer->blobs()[0]->mutable_cpu_data(), 4096, 64);
+    memcpy(layer->blobs()[0]->mutable_cpu_data(), initial_dicts[i]->cpu_data(),
+         initial_dicts[i]->count() * sizeof(float));
+    save_to_matlab("mat_D1.bin", layer->blobs()[0]->mutable_cpu_data(), 4096, 64);
+  }
+}
+
 // Train / Finetune a model.
 int train() {
   CHECK_GT(FLAGS_solver.size(), 0) << "Need a solver definition to train.";
@@ -125,6 +249,15 @@ int train() {
     Caffe::set_mode(Caffe::CPU);
   }
 
+  // Precompute initialization for dictionary layers
+  std::vector<boost::shared_ptr<caffe::Blob<float> > > initial_dicts;
+  std::vector<int> dict_layer_ids;
+  if (FLAGS_initdict >= 0) {
+    shared_ptr<caffe::Solver<float> >
+      solver(caffe::GetSolver<float>(solver_param));
+    GenerateInitialDictionaries(solver.get(), initial_dicts, dict_layer_ids);
+  }
+
   LOG(INFO) << "Starting Optimization";
   shared_ptr<caffe::Solver<float> >
     solver(caffe::GetSolver<float>(solver_param));
@@ -134,6 +267,10 @@ int train() {
     solver->Solve(FLAGS_snapshot);
   } else if (FLAGS_weights.size()) {
     CopyLayers(&*solver, FLAGS_weights);
+    if (FLAGS_initdict >= 0) {
+      LOG(INFO) << "Reinitializing dictionary using training samples";
+      InitializeDictionaries(solver.get(), initial_dicts, dict_layer_ids);
+    }
     solver->Solve();
   } else {
     solver->Solve();
@@ -354,13 +491,14 @@ int search() {
     Caffe::set_mode(Caffe::CPU);
   }
 
-  // Find dictionary layer
+  // Find layers dict1 and ip2
   caffe::LayerParameter* dict1_param = NULL;
+  caffe::LayerParameter* ip2_param = NULL;
   for (int j = 0; j < net_param.layer_size(); ++j) {
-    if (net_param.layer(j).name() == "dict1") {
+    if (net_param.layer(j).name() == "dict1")
       dict1_param = net_param.mutable_layer(j);
-      break;
-    }
+    else if (net_param.layer(j).name() == "ip2")
+      ip2_param = net_param.mutable_layer(j);
   }
 
   // Compute number of combinations for each tunable parameter
@@ -370,32 +508,48 @@ int search() {
   // dictionary_param().etha_rec [0.0001 - 0.01] (5)
 
   // Initial tuning (range 1)
-  TunableLogRange range_lr_mult(0.05, 0.2, 3);
-  TunableLogRange range_rank(16, 128, 4);
-  TunableLogRange range_num_output(32, 256, 7);
-  TunableLogRange range_lambda(0.001, 0.01, 5);
-  TunableLogRange range_etha_rec(0.00002, 0.002, 3);
+//  TunableLogRange range_lr_mult(0.05, 0.2, 3);
+//  TunableLogRange range_rank(16, 128, 4);
+//  TunableLogRange range_num_output(32, 256, 7);
+//  TunableLogRange range_lambda(0.001, 0.01, 5);
+//  TunableLogRange range_etha_rec(0.00002, 0.002, 3);
 
   // Refined tuning (range 2)
-//  TunableLogRange range_lr_mult(0.025, 0.1, 3);
-//  TunableLogRange range_rank(128, 128, 1);
-//  TunableLogRange range_num_output(128, 256, 3);
-//  TunableLogRange range_lambda(0.0025, 0.01, 3);
-//  TunableLogRange range_etha_rec(0.00002, 0.00002, 1);
+//  TunableLogRange range_lr_mult(0.01, 1.0, 7);
+//  TunableLogRange range_rank(64, 64, 1);
+//  TunableLogRange range_num_output(64, 92, 2);
+//  TunableLogRange range_lambda(0.002, 0.002, 1);
+//  TunableLogRange range_etha_rec(0.000002, 0.00002, 3);
 
-//  TunableLogRange range_lr_mult(0.1, 0.1, 1);
-//  TunableLogRange range_rank(128, 128, 1);
-//  TunableLogRange range_num_output(256, 256, 1);
-//  TunableLogRange range_lambda(0.005, 0.005, 1);
-//  TunableLogRange range_etha_rec(0.00002, 0.00002, 1);
+  TunableLogRange range_lr_mult_dict1(0.125, 2.0, 5);
+  TunableLogRange range_rank(64, 64, 1);
+  TunableLogRange range_num_output(64, 64, 1);
+  TunableLogRange range_lambda(0.001, 0.008, 4);
+  TunableLogRange range_etha_rec(0.002, 0.000002, 4);
+  TunableLogRange range_wd_mult_ip2(1.0, 100.0, 7);
+  TunableLogRange range_wd_solver(0.002, 0.002, 1);
+  TunableLogRange range_momentum(0.85, 0.85, 1);
+  TunableLogRange range_base_lr(0.0000125, 0.0001, 4);
 
-  int num_configs = range_lr_mult.steps() * range_rank.steps()
-      * range_lambda.steps() * range_etha_rec.steps() * range_num_output.steps();
+  int num_configs = range_lr_mult_dict1.steps() * range_rank.steps()
+      * range_lambda.steps() * range_etha_rec.steps() * range_num_output.steps()
+      * range_wd_mult_ip2.steps() * range_wd_solver.steps()
+      * range_momentum.steps() * range_base_lr.steps();
 
   // Reduce number of iterations
-  solver_param.set_max_iter(1000);
-  solver_param.set_test_interval(1000);
+  solver_param.set_max_iter(2500);
+  solver_param.set_test_interval(2500);
   solver_param.set_test_initialization(false);
+  solver_param.set_lr_policy("fixed");
+
+  // Precompute initialization for dictionary layers
+  std::vector<boost::shared_ptr<caffe::Blob<float> > > initial_dicts;
+  std::vector<int> dict_layer_ids;
+  if (FLAGS_initdict >= 0) {
+    shared_ptr<caffe::Solver<float> >
+      solver(caffe::GetSolver<float>(solver_param));
+    GenerateInitialDictionaries(solver.get(), initial_dicts, dict_layer_ids);
+  }
 
   time_t timer;
   time(&timer);
@@ -408,17 +562,26 @@ int search() {
 
     // Set parameters to new random combinations
     int conf_idx = rng.uniform(0, num_configs);
-    float lr_mult = range_lr_mult.val(conf_idx);
+    float lr_mult_dict1 = range_lr_mult_dict1.val(conf_idx);
     int rank = (int)round(range_rank.val(conf_idx));
     float lambda = range_lambda.val(conf_idx);
     float etha_rec = range_etha_rec.val(conf_idx);
     int num_output = (int)round(range_num_output.val(conf_idx));
     if (num_output < rank) continue;
-    dict1_param->mutable_param(0)->set_lr_mult(lr_mult);
+    float wd_mult_ip2 = range_wd_mult_ip2.val(conf_idx);
+    float wd_solver = range_wd_solver.val(conf_idx);
+    float momentum = range_momentum.val(conf_idx);
+    float base_lr = range_base_lr.val(conf_idx);
+    dict1_param->mutable_param(0)->set_lr_mult(lr_mult_dict1);
     dict1_param->mutable_dictionary_param()->set_rank(rank);
     dict1_param->mutable_dictionary_param()->set_lambda(lambda);
     dict1_param->mutable_dictionary_param()->set_etha_rec(etha_rec);
     dict1_param->mutable_dictionary_param()->set_num_output(num_output);
+    ip2_param->mutable_param(0)->set_decay_mult(wd_mult_ip2);
+    solver_param.set_weight_decay(wd_solver);
+    solver_param.set_momentum(momentum);
+    solver_param.set_base_lr(base_lr);
+
     CHECK_EQ(conf_idx, 0);
     solver_param.mutable_net_param()->CopyFrom(net_param);
 
@@ -430,6 +593,10 @@ int search() {
       solver->Solve(FLAGS_snapshot);
     } else if (FLAGS_weights.size()) {
       CopyLayers(&*solver, FLAGS_weights);
+      if (FLAGS_initdict >= 0) {
+        LOG(INFO) << "Reinitializing dictionary using training samples";
+        InitializeDictionaries(solver.get(), initial_dicts, dict_layer_ids);
+      }
       solver->Solve();
     } else {
       solver->Solve();
@@ -442,9 +609,10 @@ int search() {
     }
     int fd = open("search_results.csv", O_CREAT|O_APPEND|O_WRONLY, 0600);
     char tmp_str[128];
-    sprintf(tmp_str, "%.8f,%.8f,%.8f,%.8f,%d,%d,%.8f,%.8f\n", best_loss,
-        solver->test_loss(), solver->test_accuracy(), lr_mult, num_output, rank,
-        lambda, etha_rec);
+    sprintf(tmp_str, "%.8f,%.8f,%.8f,%.8f,%d,%d,%.8f,%.8f,%.8f,%.8f,%.8f,%.8f\n",
+        best_loss, solver->test_loss(), solver->test_accuracy(), lr_mult_dict1,
+        num_output, rank, lambda, etha_rec, wd_mult_ip2, wd_solver, momentum,
+        base_lr);
     write(fd, tmp_str, strlen(tmp_str));
     close(fd);
     LOG(INFO) << "Results: " << tmp_str;

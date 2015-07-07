@@ -262,11 +262,11 @@ void DictionaryLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   //Forward_cpu(bottom, top);
 
   // Perform normalization and decomposition (if necessary)
-  if (first_time_ || this->phase_ == TEST) {
-    forward_preprocess_cpu();
-    first_time_ = false;
-  }
-  else
+//  if (first_time_ || this->phase_ == TEST) {
+//    forward_preprocess_cpu();
+//    first_time_ = false;
+//  }
+//  else
     fast_preprocess_gpu();
   // Perform sparse coding (and optionally dictionary learning) on each input vector
   const Dtype* D = this->blobs_[0]->gpu_data();

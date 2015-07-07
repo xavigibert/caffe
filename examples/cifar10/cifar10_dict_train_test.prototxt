@@ -191,24 +191,24 @@ layer {
   top: "dict1_loss"
   propagate_down: true
   param {
-    lr_mult: 0.1
+    lr_mult: 0.125
   }
   param {
     lr_mult: 2
   }
   dictionary_param {
-    num_output: 256
-    rank: 128
+    num_output: 64
+    rank: 64
     kernel_size: 8
     stride: 1
     weight_filler {
       type: "gaussian"
       std: 0.1
     }
-    lambda: 0.005
+    lambda: 0.002
 #    etha_rec: 0.001
 #    etha_rec_bp: 0.00002
-    etha_rec: 0.00002
+    etha_rec: 0.000002
     num_iter_cg: 8
     num_iter_irls: 8
   }
@@ -220,7 +220,7 @@ layer {
   top: "ip2"
   param {
     lr_mult: 1
-    #decay_mult: 250
+    decay_mult: 2
   }
   param {
     lr_mult: 2

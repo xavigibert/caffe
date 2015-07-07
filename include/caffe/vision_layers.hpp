@@ -316,6 +316,8 @@ class DictionaryLayer : public Layer<Dtype> {
   }
 
   //virtual inline int ExactNumTopBlobs() const { return this->bottom.size(); }
+  int num_output() const { return num_output_; }
+  int kernel_dim() const { return kernel_dim_; }
 
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,

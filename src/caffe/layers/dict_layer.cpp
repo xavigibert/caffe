@@ -163,6 +163,9 @@ void DictionaryLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     // First r right singular vectors of D (Vt)
     this->blobs_[bias_idx_ + 2].reset(new Blob<Dtype>(
         1, 1, rank_, num_output_));
+    // Initialize Vt with random numbers
+    memcpy(this->blobs_[bias_idx_ + 2]->mutable_cpu_data(),
+        this->blobs_[0]->cpu_data(), rank_ * num_output_ * sizeof(Dtype));
     // Vt premultiplied by S^(2)
     this->blobs_[bias_idx_ + 3].reset(new Blob<Dtype>(
         1, 1, rank_, num_output_));
@@ -248,8 +251,8 @@ void DictionaryLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
 template <typename Dtype>
 void DictionaryLayer<Dtype>::ToProto(LayerParameter* param, bool write_diff) {
   // Set dirty flag to force recomputing decomposition
-  Dtype* Dflag = this->blobs_[bias_idx_ + 1]->mutable_cpu_data();
-  *Dflag = (Dtype)1.;
+  //Dtype* Dflag = this->blobs_[bias_idx_ + 1]->mutable_cpu_data();
+  //*Dflag = (Dtype)1.;
   Layer<Dtype>::ToProto(param, write_diff);
 }
 
@@ -466,11 +469,11 @@ template <typename Dtype>
 void DictionaryLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   // Perform normalization and decomposition (if necessary)
-  if (first_time_ || this->phase_ == TEST) {
-    forward_preprocess_cpu();
-    first_time_ = false;
-  }
-  else
+//  if (first_time_ || this->phase_ == TEST) {
+//    forward_preprocess_cpu();
+//    first_time_ = false;
+//  }
+//  else
     fast_preprocess_cpu();
   // Perform sparse coding (and optionally dictionary learning) on each input vector
   const Dtype* D = this->blobs_[0]->cpu_data();
