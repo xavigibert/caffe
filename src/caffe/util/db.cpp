@@ -9,9 +9,9 @@ namespace caffe { namespace db {
 DB* GetDB(DataParameter::DB backend) {
   switch (backend) {
   case DataParameter_DB_LEVELDB:
-  case DataParameter_DB_LEVELDB_FILE:
     return new LevelDB();
   case DataParameter_DB_LMDB:
+  case DataParameter_DB_LMDB_FILE:
     return new LMDB();
   default:
     LOG(FATAL) << "Unknown database backend";

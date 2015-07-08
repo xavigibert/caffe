@@ -100,7 +100,7 @@ class DataLayer : public BasePrefetchingDataLayer<Dtype> {
 
   shared_ptr<db::DB> db_;
   shared_ptr<db::Cursor> cursor_;
-  // (XGS) LEVELDB_FILE
+  // (XGS) LMDB_FILE
   int fd_data_;
   int num_source_map_;
   char** source_map_;

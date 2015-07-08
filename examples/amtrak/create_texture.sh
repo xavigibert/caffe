@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# This script converts the mnist data into lmdb/leveldb format,
+# This script converts the Amtrak texture patches into lmdb/leveldb format,
 # depending on the value assigned to $BACKEND.
 
 EXAMPLE=examples/amtrak
@@ -11,18 +11,18 @@ NUMTEST=20000
 IMAGES="$DATA/split0-images-idx3-ubyte $DATA/split1-images-idx3-ubyte $DATA/split2-images-idx3-ubyte $DATA/split3-images-idx3-ubyte $DATA/split4-images-idx3-ubyte"
 LABELS="$DATA/split0-labels-idx1-ubyte $DATA/split1-labels-idx1-ubyte $DATA/split2-labels-idx1-ubyte $DATA/split3-labels-idx1-ubyte $DATA/split4-labels-idx1-ubyte"
 
-BACKEND="leveldb"
+BACKEND="lmdb"
 
-DBTRAIN0=$EXAMPLE/amtrak_train0_${BACKEND}
-DBTEST0=$EXAMPLE/amtrak_test0_${BACKEND}
-DBTRAIN1=$EXAMPLE/amtrak_train1_${BACKEND}
-DBTEST1=$EXAMPLE/amtrak_test1_${BACKEND}
-DBTRAIN2=$EXAMPLE/amtrak_train2_${BACKEND}
-DBTEST2=$EXAMPLE/amtrak_test2_${BACKEND}
-DBTRAIN3=$EXAMPLE/amtrak_train3_${BACKEND}
-DBTEST3=$EXAMPLE/amtrak_test3_${BACKEND}
-DBTRAIN4=$EXAMPLE/amtrak_train4_${BACKEND}
-DBTEST4=$EXAMPLE/amtrak_test4_${BACKEND}
+DBTRAIN0=$EXAMPLE/db_text_train0_${BACKEND}
+DBTEST0=$EXAMPLE/db_text_test0_${BACKEND}
+DBTRAIN1=$EXAMPLE/db_text_train1_${BACKEND}
+DBTEST1=$EXAMPLE/db_text_test1_${BACKEND}
+DBTRAIN2=$EXAMPLE/db_text_train2_${BACKEND}
+DBTEST2=$EXAMPLE/db_text_test2_${BACKEND}
+DBTRAIN3=$EXAMPLE/db_text_train3_${BACKEND}
+DBTEST3=$EXAMPLE/db_text_test3_${BACKEND}
+DBTRAIN4=$EXAMPLE/db_text_train4_${BACKEND}
+DBTEST4=$EXAMPLE/db_text_test4_${BACKEND}
 
 echo "Creating ${BACKEND}..."
 

@@ -24,7 +24,7 @@ template <typename Dtype>
 DataLayer<Dtype>::~DataLayer<Dtype>() {
   this->JoinPrefetchThread();
   // clean up resources
-  if (this->layer_param_.data_param().backend() == DataParameter_DB_LEVELDB_FILE ) {
+  if (this->layer_param_.data_param().backend() == DataParameter_DB_LMDB_FILE ) {
     close(fd_data_);
     for (int i = 0; i < num_source_map_; ++i)
       delete source_map_[i];
@@ -70,7 +70,7 @@ void DataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
     this->prefetch_label_.Reshape(label_shape);
   }
   // XGS: Support for DB indexed files
-  if (this->layer_param_.data_param().backend() == DataParameter_DB_LEVELDB_FILE) {
+  if (this->layer_param_.data_param().backend() == DataParameter_DB_LMDB_FILE) {
     num_source_map_ = this->layer_param_.data_param().source_map_size();
     CHECK(num_source_map_ > 0);
     source_map_ = new char*[num_source_map_];
@@ -121,7 +121,7 @@ void DataLayer<Dtype>::InternalThreadEntry() {
     timer.Start();
     if( datum.has_src_offset() )
     {
-      CHECK_EQ(this->layer_param_.data_param().backend(), DataParameter_DB_LEVELDB_FILE);
+      CHECK_EQ(this->layer_param_.data_param().backend(), DataParameter_DB_LMDB_FILE);
       CHECK(datum.has_file_idx());
       int image_size = datum.channels() * datum.height() * datum.width();
       uint8_t* pixels = new uint8_t[image_size];
@@ -141,7 +141,7 @@ void DataLayer<Dtype>::InternalThreadEntry() {
       delete[] pixels;
     }
     else
-      CHECK_NE(this->layer_param_.data_param().backend(), DataParameter_DB_LEVELDB_FILE);
+      CHECK_NE(this->layer_param_.data_param().backend(), DataParameter_DB_LMDB_FILE);
     // Apply data transformations (mirror, scale, crop...)
     int offset = this->prefetch_data_.offset(item_id);
     this->transformed_data_.set_cpu_data(top_data + offset);

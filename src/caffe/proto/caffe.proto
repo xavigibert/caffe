@@ -36,7 +36,7 @@ message Datum {
   repeated float float_data = 6;
   // If true data contains an encoded image that need to be decoded
   optional bool encoded = 7 [default = false];
-  // (XGS) When DataParameter.backend is set to LEVELDB_FILE, the following
+  // (XGS) When DataParameter.backend is set to LMDB_FILE, the following
   // fields indicate the file and offset where the images are loaded from
   optional int32 file_idx = 8;
   optional int64 src_offset = 9;
@@ -507,7 +507,7 @@ message DataParameter {
   enum DB {
     LEVELDB = 0;
     LMDB = 1;
-    LEVELDB_FILE = 2;       // (XGS) Level DB contains pointers to data file
+    LMDB_FILE = 2;       // (XGS) LMDB DB contains pointers to data file
   }
   // Specify the data source.
   optional string source = 1;

@@ -11,13 +11,13 @@ layers {
     source_map: "data/amtrak/split2-images-idx3-ubyte"
     source_map: "data/amtrak/split3-images-idx3-ubyte"
     source_map: "data/amtrak/split4-images-idx3-ubyte"
-    backend: LEVELDB_FILE
+    backend: LMDB_FILE
     batch_size: 64
   }
   transform_param {
     scale: 0.00390625
-    mean_file: "examples/amtrak/average_image.binaryproto"
     crop_size: 75
+    mean_value: 96
     mirror: true
     mirror_v: true
   }
@@ -35,13 +35,13 @@ layers {
     source_map: "data/amtrak/split2-images-idx3-ubyte"
     source_map: "data/amtrak/split3-images-idx3-ubyte"
     source_map: "data/amtrak/split4-images-idx3-ubyte"
-    backend: LEVELDB_FILE
+    backend: LMDB_FILE
     batch_size: 100
   }
   transform_param {
     scale: 0.00390625
-    mean_file: "examples/amtrak/average_image.binaryproto"
     crop_size: 75
+    mean_value: 96
     mirror: false
   }
   include: { phase: TEST }
