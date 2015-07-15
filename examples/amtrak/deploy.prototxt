@@ -4,15 +4,22 @@ input_dim: 1
 input_dim: 1
 input_dim: 320
 input_dim: 4096
-layers {
-  name: "conv1"
-  type: CONVOLUTION
+# Common network
+layer {
+  name: "conv1_t"
+  type: "Convolution"
   bottom: "data"
-  top: "conv1"
-  blobs_lr: 1
-  blobs_lr: 2
-  weight_decay: 1
-  weight_decay: 0
+  top: "conv1_t"
+  param {
+    name: "conv1_w"
+    lr_mult: 1
+    decay_mult: 1
+  }
+  param {
+    name: "conv1_b"
+    lr_mult: 2
+    decay_mult: 0
+  }
   convolution_param {
     num_output: 48
     kernel_size: 9
@@ -27,26 +34,32 @@ layers {
     }
   }
 }
-layers {
-  name: "pool1"
-  type: POOLING
-  bottom: "conv1"
-  top: "pool1"
+layer {
+  name: "pool1_t"
+  type: "Pooling"
+  bottom: "conv1_t"
+  top: "pool1_t"
   pooling_param {
     pool: MAX
     kernel_size: 3
     stride: 2
   }
 }
-layers {
-  name: "conv2"
-  type: CONVOLUTION
-  bottom: "pool1"
-  top: "conv2"
-  blobs_lr: 1
-  blobs_lr: 2
-  weight_decay: 1
-  weight_decay: 0
+layer {
+  name: "conv2_t"
+  type: "Convolution"
+  bottom: "pool1_t"
+  top: "conv2_t"
+  param {
+    name: "conv2_w"
+    lr_mult: 1
+    decay_mult: 1
+  }
+  param {
+    name: "conv2_b"
+    lr_mult: 2
+    decay_mult: 0
+  }
   convolution_param {
     num_output: 64
     kernel_size: 5
@@ -61,30 +74,38 @@ layers {
     }
   }
 }
-layers {
-  name: "relu2"
-  type: RELU
-  bottom: "conv2"
-  top: "conv2"
+layer {
+  name: "relu2_t"
+  type: "ReLU"
+  bottom: "conv2_t"
+  top: "conv2_t"
 }
-layers {
-  name: "pool2"
-  type: POOLING
-  bottom: "conv2"
-  top: "pool2"
+layer {
+  name: "pool2_t"
+  type: "Pooling"
+  bottom: "conv2_t"
+  top: "pool2_t"
   pooling_param {
     pool: MAX
     kernel_size: 3
     stride: 2
   }
 }
-layers {
-  name: "ip1"
-  type: CONVOLUTION
-  bottom: "pool2"
-  top: "ip1"
-  blobs_lr: 1
-  blobs_lr: 2
+layer {
+  name: "conv3_t"
+  type: "Convolution"
+  bottom: "pool2_t"
+  top: "conv3_t"
+  param {
+    name: "conv3_w"
+    lr_mult: 1
+    decay_mult: 1
+  }
+  param {
+    name: "conv3_b"
+    lr_mult: 2
+    decay_mult: 0
+  }
   convolution_param {
     num_output: 256
     kernel_size: 5
@@ -98,34 +119,129 @@ layers {
     }
   }
 }
-layers {
-  name: "relu1"
-  type: RELU
-  bottom: "ip1"
-  top: "ip1"
+layer {
+  name: "drop3_t"
+  type: "Dropout"
+  bottom: "conv3_t"
+  top: "conv3_t"
+  dropout_param {
+    dropout_ratio: 0.1
+  }
 }
-layers {
-  name: "pool3"
-  type: POOLING
-  bottom: "ip1"
-  top: "pool3"
+layer {
+  name: "relu3_t"
+  type: "ReLU"
+  bottom: "conv3_t"
+  top: "conv3_t"
+}
+layer {
+  name: "pool3_t"
+  type: "Pooling"
+  bottom: "conv3_t"
+  top: "pool3_t"
   pooling_param {
     pool: MAX
     kernel_size: 3
     stride: 2
   }
 }
-layers {
-  name: "ip2"
-  type: CONVOLUTION
-  bottom: "pool3"
-  top: "ip2"
-  blobs_lr: 1
-  blobs_lr: 2
-  weight_decay: 1
-  weight_decay: 0
+# Texture branch
+layer {
+  name: "ip4_t"
+  type: "Convolution"
+  bottom: "pool3_t"
+  top: "ip4_t"
+  param {
+    lr_mult: 2
+    decay_mult: 2
+  }
+  param {
+    lr_mult: 4
+    decay_mult: 0
+  }
   convolution_param {
     num_output: 10
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+# Fasteners branch
+layer {
+  name: "conv4_f"
+  type: "Convolution"
+  bottom: "pool3_t"
+  top: "conv4_f"
+  param {
+    lr_mult: 1
+    decay_mult: 2
+  }
+  param {
+    lr_mult: 2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 16
+    kernel_size: 5
+    pad: 2
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+layer {
+  name: "relu4_f"
+  type: "ReLU"
+  bottom: "conv4_f"
+  top: "conv4_f"
+}
+layer {
+  name: "drop4_f"
+  type: "Dropout"
+  bottom: "conv4_f"
+  top: "conv4_f"
+  dropout_param {
+    dropout_ratio: 0.2
+  }
+}
+layer {
+  name: "pool4_f"
+  type: "Pooling"
+  bottom: "conv4_f"
+  top: "pool4_f"
+  pooling_param {
+    pool: MAX
+    kernel_size: 3
+    stride: 1
+    pad: 1
+  }
+}
+layer {
+  name: "ip5_f"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_f"
+  param {
+    lr_mult: 1
+    decay_mult: 2
+  }
+  param {
+    lr_mult: 2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 5
     kernel_size: 1
     weight_filler {
       type: "gaussian"
