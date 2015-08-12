@@ -104,9 +104,9 @@ int feature_extraction_pipeline(int argc, char** argv) {
   for (int batch_index = 0; batch_index < num_mini_batches; ++batch_index) {
     feature_extraction_net->Forward(input_vec);
     const shared_ptr<Blob<Dtype> > feature_blob = feature_extraction_net
-      ->blob_by_name("ip2");
+      ->blob_by_name("ip4_t");
     const shared_ptr<Blob<Dtype> > label_blob = feature_extraction_net
-      ->blob_by_name("label");
+      ->blob_by_name("label_t");
 
     int batch_size = feature_blob->num();
     int dim_features = feature_blob->count() / batch_size;

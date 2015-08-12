@@ -97,6 +97,8 @@ void convert_dataset(int num_files, char** image_filename,
       max_max_samples = max_samples[i];
   }
   int num_subsplits = (max_max_samples+999) / 1000;
+  if( num_subsplits < 1 )
+    num_subsplits = 1;
 
   // Storing to db
   char label;
@@ -122,11 +124,13 @@ void convert_dataset(int num_files, char** image_filename,
     CHECK_EQ(magic, 2049) << "Incorrect label file magic.";
     label_file.read(reinterpret_cast<char*>(&num_labels), 4);
     num_labels = swap_endian(num_labels);
-    CHECK_EQ(num_items, num_labels);
+    //CHECK_EQ(num_items, num_labels);
+    if( max_samples[file_idx] < 0 )
+      max_samples[file_idx] = num_labels;
     CHECK(max_samples[file_idx] <= num_labels);
 
     LOG(INFO) << "File " << file_idx << ": " << max_samples[file_idx] << " of "
-              << num_items << " items.";
+              << num_labels << " items.";
 
     int start_id = sub_idx * max_samples[file_idx] / num_subsplits;
     label_file.seekg(start_id,std::ios_base::cur);
@@ -225,8 +229,12 @@ int main(int argc, char** argv) {
     char** input_label_files = &argv[2+num_files];
     char** str_samples_per_file = &argv[2+2*num_files];
     int* samples_per_file = new int[num_files];
-    for( int i = 0; i < num_files; i++ )
-      samples_per_file[i] = atoi(str_samples_per_file[i]);
+    for( int i = 0; i < num_files; i++ ) {
+      if( str_samples_per_file[i][0] == 'A' )
+        samples_per_file[i] = -1;
+      else
+        samples_per_file[i] = atoi(str_samples_per_file[i]);
+    }
     char* db_path = argv[2+3*num_files];
     
     convert_dataset(num_files, input_image_files, input_label_files, \

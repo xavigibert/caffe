@@ -10,7 +10,7 @@ NUMTEST=450000
 IMAGES="$DATA/split0-images-idx3-ubyte $DATA/split1-images-idx3-ubyte $DATA/split2-images-idx3-ubyte $DATA/split3-images-idx3-ubyte $DATA/split4-images-idx3-ubyte"
 LABELS="$DATA/split0-labels-idx1-ubyte $DATA/split1-labels-idx1-ubyte $DATA/split2-labels-idx1-ubyte $DATA/split3-labels-idx1-ubyte $DATA/split4-labels-idx1-ubyte"
 
-BACKEND="leveldb"
+BACKEND="lmdb"
 
 DBTEST0=$EXAMPLE/amtrak_test0c_${BACKEND}
 DBTEST1=$EXAMPLE/amtrak_test1c_${BACKEND}

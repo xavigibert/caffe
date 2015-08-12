@@ -85,7 +85,7 @@ layer {
     source_map: "data/amtrak/fast3-images-idx3-ubyte"
     source_map: "data/amtrak/fast4-images-idx3-ubyte"
     backend: LMDB_FILE
-    batch_size: 25
+    batch_size: 50
   }
   transform_param {
     scale: 0.00390625
@@ -392,7 +392,6 @@ layer {
     }
   }
 }
-
 layer {
   name: "relu3_f"
   type: "ReLU"
@@ -425,15 +424,17 @@ layer {
   bottom: "pool3_f"
   top: "conv4_f"
   param {
+    name: "conv4_w"
     lr_mult: 1
     decay_mult: 2
   }
   param {
+    name: "conv4_b"
     lr_mult: 2
     decay_mult: 0
   }
   convolution_param {
-    num_output: 16
+    num_output: 1024
     kernel_size: 5
     weight_filler {
       type: "gaussian"
