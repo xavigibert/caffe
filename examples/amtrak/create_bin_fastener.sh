@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+#!/bin/bash
 # This script converts the Amtrak fastener images into lmdb/leveldb format,
 # depending on the value assigned to $BACKEND.
 
