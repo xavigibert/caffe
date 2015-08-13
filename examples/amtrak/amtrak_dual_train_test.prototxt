@@ -434,7 +434,7 @@ layer {
     decay_mult: 0
   }
   convolution_param {
-    num_output: 256
+    num_output: 16
     kernel_size: 5
     weight_filler {
       type: "gaussian"
