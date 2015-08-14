@@ -94,16 +94,25 @@ class DataLayer : public BasePrefetchingDataLayer<Dtype> {
  public:
   explicit DataLayer(const LayerParameter& param);
   virtual ~DataLayer();
+  virtual void DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+  // DataLayer uses DataReader instead for sharing for parallelism
+  virtual inline bool ShareInParallel() const { return false; }
+  virtual inline const char* type() const { return "Data"; }
+  virtual inline int ExactNumBottomBlobs() const { return 0; }
+  virtual inline int MinTopBlobs() const { return 1; }
+  virtual inline int MaxTopBlobs() const { return 2; }
 
-  shared_ptr<db::DB> db_;
-  shared_ptr<db::Cursor> cursor_;
+protected:
+  virtual void load_batch(Batch<Dtype>* batch);
+
+  DataReader reader_;
+
   // (XGS) LMDB_FILE
   int fd_data_;
   int num_source_map_;
   char** source_map_;
   int cur_source_map_;
-
-  DataReader reader_;
 };
 
 /**
