@@ -300,6 +300,10 @@ message ParamSpec {
 
   // The multiplier on the global weight decay for this parameter.
   optional float decay_mult = 4 [default = 1.0];
+
+  // The premultiplier on the gradients to overcome the limitation that when
+  // sharing parameters, all layers must use the same lr_mult
+  optional float lr_pre_mult = 5 [default = 1.0];
 }
 
 // NOTE

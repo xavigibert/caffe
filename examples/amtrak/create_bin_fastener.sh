@@ -98,12 +98,14 @@ layer {
   top: \"conv1_${TASK}_${CL}\"
   param {
     name: \"conv1_w\"
-    lr_mult: 0.01
+    lr_mult: 1
+    lr_pre_mult: 0.01
     decay_mult: 1
   }
   param {
     name: \"conv1_b\"
-    lr_mult: 0.02
+    lr_mult: 2
+    lr_pre_mult: 0.01
     decay_mult: 0
   }
   convolution_param {
@@ -138,12 +140,14 @@ layer {
   top: \"conv2_${TASK}_${CL}\"
   param {
     name: \"conv2_w\"
-    lr_mult: 0.01
+    lr_mult: 1
+    lr_pre_mult: 0.01
     decay_mult: 1
   }
   param {
     name: \"conv2_b\"
-    lr_mult: 0.02
+    lr_mult: 2
+    lr_pre_mult: 0.01
     decay_mult: 0
   }
   convolution_param {
@@ -184,12 +188,14 @@ layer {
   top: \"conv3_${TASK}_${CL}\"
   param {
     name: \"conv3_w\"
-    lr_mult: 0.01
+    lr_mult: 1
+    lr_pre_mult: 0.01
     decay_mult: 1
   }
   param {
     name: \"conv3_b\"
-    lr_mult: 0.02
+    lr_mult: 2
+    lr_pre_mult: 0.01
     decay_mult: 0
   }
   convolution_param {
@@ -238,12 +244,14 @@ layer {
   top: \"conv4_${TASK}_${CL}\"
   param {
     name: \"conv4_w\"
-    lr_mult: 0.02
-    decay_mult: 2
+    lr_mult: 1
+    lr_pre_mult: 0.02
+    decay_mult: 1
   }
   param {
     name: \"conv4_b\"
-    lr_mult: 0.04
+    lr_mult: 2
+    lr_pre_mult: 0.02
     decay_mult: 0
   }
   convolution_param {

@@ -107,6 +107,8 @@ class BaseConvolutionLayer : public Layer<Dtype> {
   int weight_offset_;
   int col_offset_;
   int output_offset_;
+  Dtype lr_pre_mult_weight_;
+  Dtype lr_pre_mult_bias_;
 
   Blob<Dtype> col_buffer_;
   Blob<Dtype> bias_multiplier_;

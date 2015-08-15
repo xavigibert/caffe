@@ -98,6 +98,16 @@ void BaseConvolutionLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   }
   // Propagate gradients to the parameters (as directed by backward pass).
   this->param_propagate_down_.resize(this->blobs_.size(), true);
+  // Retrieve learning rate premultiplier used to simulate different learning
+  // rates when layers share parameters
+  if (this->layer_param_.param_size()>0 && this->layer_param_.param(0).has_lr_pre_mult())
+    this->lr_pre_mult_weight_ = (Dtype)this->layer_param_.param(0).lr_pre_mult();
+  else
+    this->lr_pre_mult_weight_ = (Dtype)1;
+  if (this->layer_param_.param_size()>1 && this->layer_param_.param(1).has_lr_pre_mult())
+    this->lr_pre_mult_bias_ = (Dtype)this->layer_param_.param(1).lr_pre_mult();
+  else
+    this->lr_pre_mult_bias_ = (Dtype)1;
 }
 
 template <typename Dtype>
@@ -279,7 +289,7 @@ void BaseConvolutionLayer<Dtype>::weight_gpu_gemm(const Dtype* input,
   for (int g = 0; g < group_; ++g) {
     caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasTrans, conv_out_channels_ / group_,
         kernel_dim_ / group_, conv_out_spatial_dim_,
-        (Dtype)1., output + output_offset_ * g, col_buff + col_offset_ * g,
+        lr_pre_mult_weight_, output + output_offset_ * g, col_buff + col_offset_ * g,
         (Dtype)1., weights + weight_offset_ * g);
   }
 }
@@ -287,8 +297,8 @@ void BaseConvolutionLayer<Dtype>::weight_gpu_gemm(const Dtype* input,
 template <typename Dtype>
 void BaseConvolutionLayer<Dtype>::backward_gpu_bias(Dtype* bias,
     const Dtype* input) {
-  caffe_gpu_gemv<Dtype>(CblasNoTrans, num_output_, height_out_ * width_out_, 1.,
-      input, bias_multiplier_.gpu_data(), 1., bias);
+  caffe_gpu_gemv<Dtype>(CblasNoTrans, num_output_, height_out_ * width_out_,
+      lr_pre_mult_bias_, input, bias_multiplier_.gpu_data(), 1., bias);
 }
 
 #endif  // !CPU_ONLY

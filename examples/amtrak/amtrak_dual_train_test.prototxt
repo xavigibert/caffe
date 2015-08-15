@@ -285,12 +285,14 @@ layer {
   top: "conv1_f"
   param {
     name: "conv1_w"
-    lr_mult: 0.5
+    lr_mult: 1
+    lr_pre_mult: 0.5
     decay_mult: 1
   }
   param {
     name: "conv1_b"
-    lr_mult: 1
+    lr_mult: 2
+    lr_pre_mult: 0.5
     decay_mult: 0
   }
   convolution_param {
@@ -325,12 +327,14 @@ layer {
   top: "conv2_f"
   param {
     name: "conv2_w"
-    lr_mult: 0.5
+    lr_mult: 1
+    lr_pre_mult: 0.5
     decay_mult: 1
   }
   param {
     name: "conv2_b"
-    lr_mult: 1
+    lr_mult: 2
+    lr_pre_mult: 0.5
     decay_mult: 0
   }
   convolution_param {
@@ -371,12 +375,14 @@ layer {
   top: "conv3_f"
   param {
     name: "conv3_w"
-    lr_mult: 0.5
+    lr_mult: 1
+    lr_pre_mult: 0.5
     decay_mult: 1
   }
   param {
     name: "conv3_b"
-    lr_mult: 1
+    lr_mult: 2
+    lr_pre_mult: 0.5
     decay_mult: 0
   }
   convolution_param {
@@ -426,7 +432,7 @@ layer {
   param {
     name: "conv4_w"
     lr_mult: 1
-    decay_mult: 2
+    decay_mult: 1
   }
   param {
     name: "conv4_b"
