@@ -2,7 +2,6 @@ name: "UMIACS_Deploy"
 input: "data"
 input_dim: 1
 input_dim: 1
-#input_dim: 320
 input_dim: 416
 input_dim: 4096
 # Common network
@@ -173,17 +172,19 @@ layer {
     }
   }
 }
-# Fasteners branch
+# Fasteners common features
 layer {
   name: "conv4_f"
   type: "Convolution"
   bottom: "pool3_t"
   top: "conv4_f"
   param {
+    name: "conv4_w"
     lr_mult: 1
-    decay_mult: 2
+    decay_mult: 1
   }
   param {
+    name: "conv4_b"
     lr_mult: 2
     decay_mult: 0
   }
@@ -241,6 +242,902 @@ layer {
   }
   convolution_param {
     num_output: 5
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsBg, class 00
+layer {
+  name: "ip5_fastVsBg_00"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsBg_00"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsBg, class 01
+layer {
+  name: "ip5_fastVsBg_01"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsBg_01"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsBg, class 02
+layer {
+  name: "ip5_fastVsBg_02"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsBg_02"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsBg, class 03
+layer {
+  name: "ip5_fastVsBg_03"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsBg_03"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsBg, class 04
+layer {
+  name: "ip5_fastVsBg_04"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsBg_04"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsBg, class 05
+layer {
+  name: "ip5_fastVsBg_05"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsBg_05"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsBg, class 06
+layer {
+  name: "ip5_fastVsBg_06"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsBg_06"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsBg, class 07
+layer {
+  name: "ip5_fastVsBg_07"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsBg_07"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsBg, class 08
+layer {
+  name: "ip5_fastVsBg_08"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsBg_08"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsBg, class 09
+layer {
+  name: "ip5_fastVsBg_09"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsBg_09"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsBg, class 10
+layer {
+  name: "ip5_fastVsBg_10"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsBg_10"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsBg, class 11
+layer {
+  name: "ip5_fastVsBg_11"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsBg_11"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsBg, class 12
+layer {
+  name: "ip5_fastVsBg_12"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsBg_12"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsBg, class 13
+layer {
+  name: "ip5_fastVsBg_13"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsBg_13"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsBg, class 14
+layer {
+  name: "ip5_fastVsBg_14"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsBg_14"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsBg, class 15
+layer {
+  name: "ip5_fastVsBg_15"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsBg_15"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsFast, class 00
+layer {
+  name: "ip5_fastVsFast_00"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsFast_00"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsFast, class 01
+layer {
+  name: "ip5_fastVsFast_01"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsFast_01"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsFast, class 02
+layer {
+  name: "ip5_fastVsFast_02"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsFast_02"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsFast, class 03
+layer {
+  name: "ip5_fastVsFast_03"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsFast_03"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsFast, class 04
+layer {
+  name: "ip5_fastVsFast_04"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsFast_04"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsFast, class 05
+layer {
+  name: "ip5_fastVsFast_05"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsFast_05"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsFast, class 06
+layer {
+  name: "ip5_fastVsFast_06"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsFast_06"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsFast, class 07
+layer {
+  name: "ip5_fastVsFast_07"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsFast_07"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsFast, class 08
+layer {
+  name: "ip5_fastVsFast_08"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsFast_08"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsFast, class 09
+layer {
+  name: "ip5_fastVsFast_09"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsFast_09"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsFast, class 10
+layer {
+  name: "ip5_fastVsFast_10"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsFast_10"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsFast, class 11
+layer {
+  name: "ip5_fastVsFast_11"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsFast_11"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsFast, class 12
+layer {
+  name: "ip5_fastVsFast_12"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsFast_12"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsFast, class 13
+layer {
+  name: "ip5_fastVsFast_13"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsFast_13"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsFast, class 14
+layer {
+  name: "ip5_fastVsFast_14"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsFast_14"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
+    kernel_size: 1
+    weight_filler {
+      type: "gaussian"
+      std: 0.01
+    }
+    bias_filler {
+      type: "constant"
+      value: 0
+    }
+  }
+}
+
+# Task fastVsFast, class 15
+layer {
+  name: "ip5_fastVsFast_15"
+  type: "Convolution"
+  bottom: "pool4_f"
+  top: "ip5_fastVsFast_15"
+  param {
+    lr_mult: 0.1
+    decay_mult: 20
+  }
+  param {
+    lr_mult: 0.2
+    decay_mult: 0
+  }
+  convolution_param {
+    num_output: 2
     kernel_size: 1
     weight_filler {
       type: "gaussian"
