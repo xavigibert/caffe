@@ -24,6 +24,7 @@ for TASK in $TLIST; do
 done
 
 ./build/tools/caffe train --gpu=$2 --solver=examples/amtrak/amtrak_tri_solver.prototxt
+# ./build/tools/caffe train --gpu=$2 --solver=examples/amtrak/amtrak_dual_solver.prototxt
 mv examples/amtrak/net_iter_300000.caffemodel examples/amtrak/net$1_iter_300000.caffemodel
 mv examples/amtrak/net_iter_300000.solverstate examples/amtrak/net$1_iter_300000.solverstate
 
