@@ -1,13 +1,9 @@
-name: "CIFAR10_full_deploy"
-# N.B. input image must be in CIFAR-10 format
-# as described at http://www.cs.toronto.edu/~kriz/cifar.html
+name: "CIFAR10_quick_test"
 input: "data"
-input_shape {
-  dim: 1
-  dim: 3
-  dim: 32
-  dim: 32
-}
+input_dim: 1
+input_dim: 3
+input_dim: 32
+input_dim: 32
 layer {
   name: "conv1"
   type: "Convolution"
@@ -44,21 +40,9 @@ layer {
   top: "pool1"
 }
 layer {
-  name: "norm1"
-  type: "LRN"
-  bottom: "pool1"
-  top: "norm1"
-  lrn_param {
-    local_size: 3
-    alpha: 5e-05
-    beta: 0.75
-    norm_region: WITHIN_CHANNEL
-  }
-}
-layer {
   name: "conv2"
   type: "Convolution"
-  bottom: "norm1"
+  bottom: "pool1"
   top: "conv2"
   param {
     lr_mult: 1
@@ -91,22 +75,16 @@ layer {
   }
 }
 layer {
-  name: "norm2"
-  type: "LRN"
-  bottom: "pool2"
-  top: "norm2"
-  lrn_param {
-    local_size: 3
-    alpha: 5e-05
-    beta: 0.75
-    norm_region: WITHIN_CHANNEL
-  }
-}
-layer {
   name: "conv3"
   type: "Convolution"
-  bottom: "norm2"
+  bottom: "pool2"
   top: "conv3"
+  param {
+    lr_mult: 1
+  }
+  param {
+    lr_mult: 2
+  }
   convolution_param {
     num_output: 64
     pad: 2
@@ -138,11 +116,24 @@ layer {
   top: "ip1"
   param {
     lr_mult: 1
-    decay_mult: 250
   }
   param {
     lr_mult: 2
-    decay_mult: 0
+  }
+  inner_product_param {
+    num_output: 64
+  }
+}
+layer {
+  name: "ip2"
+  type: "InnerProduct"
+  bottom: "ip1"
+  top: "ip2"
+  param {
+    lr_mult: 1
+  }
+  param {
+    lr_mult: 2
   }
   inner_product_param {
     num_output: 10
@@ -151,6 +142,6 @@ layer {
 layer {
   name: "prob"
   type: "Softmax"
-  bottom: "ip1"
+  bottom: "ip2"
   top: "prob"
 }
