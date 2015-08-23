@@ -804,6 +804,88 @@ class PReLULayer : public NeuronLayer<Dtype> {
   Blob<Dtype> bottom_memory_;  // memory for in-place computation
 };
 
+/**
+ * @brief Multiple Kernel Learning non-linearity @f$
+ *        y_i = sum_{i=1}^d a_i x^i
+ *        @f$. Polynomial coefficients are learnable parameters.
+ */
+template <typename Dtype>
+class MklLayer : public NeuronLayer<Dtype> {
+ public:
+  /**
+   * @param param provides MklParameter mkl_param,
+   *     with MklLayer options:
+   *   - degree (\b optional, uint32,
+   *     default 4).
+   */
+  explicit MklLayer(const LayerParameter& param)
+      : NeuronLayer<Dtype>(param) {}
+
+  virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+
+  virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+
+  virtual inline const char* type() const { return "Mkl"; }
+
+ protected:
+  /**
+   * @param bottom input Blob vector (length 1)
+   *   -# @f$ (N \times C \times ...) @f$
+   *      the inputs @f$ x @f$
+   * @param top output Blob vector (length 1)
+   *   -# @f$ (N \times C \times ...) @f$
+   *      the computed outputs for each channel @f$i@f$ @f$
+   *        y_i = \max(0, x_i) + a_i \min(0, x_i)
+   *      @f$.
+   */
+  virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+  //virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
+  //    const vector<Blob<Dtype>*>& top);
+
+  /**
+   * @brief Computes the error gradient w.r.t. the Mkl inputs.
+   *
+   * @param top output Blob vector (length 1), providing the error gradient with
+   *      respect to the outputs
+   *   -# @f$ (N \times C \times ...) @f$
+   *      containing error gradients @f$ \frac{\partial E}{\partial y} @f$
+   *      with respect to computed outputs @f$ y @f$
+   * @param propagate_down see Layer::Backward.
+   * @param bottom input Blob vector (length 1)
+   *   -# @f$ (N \times C \times ...) @f$
+   *      the inputs @f$ x @f$; For each channel @f$i@f$, backward fills their
+   *      diff with gradients @f$
+   *        \frac{\partial E}{\partial x_i} = \left\{
+   *        \begin{array}{lr}
+   *            a_i \frac{\partial E}{\partial y_i} & \mathrm{if} \; x_i \le 0 \\
+   *            \frac{\partial E}{\partial y_i} & \mathrm{if} \; x_i > 0
+   *        \end{array} \right.
+   *      @f$.
+   *      If param_propagate_down_[0] is true, it fills the diff with gradients
+   *      @f$
+   *        \frac{\partial E}{\partial a_i} = \left\{
+   *        \begin{array}{lr}
+   *            \sum_{x_i} x_i \frac{\partial E}{\partial y_i} & \mathrm{if} \; x_i \le 0 \\
+   *            0 & \mathrm{if} \; x_i > 0
+   *        \end{array} \right.
+   *      @f$.
+   */
+  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  //virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
+  //    const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+
+  MklParameter_KernelType kernel_type_;
+  int degree_;
+  bool channel_shared_;
+  Blob<Dtype> multiplier_;  // dot multiplier for backward computation of params
+  Blob<Dtype> backward_buff_;  // temporary buffer for backward computation
+  Blob<Dtype> bottom_memory_;  // memory for in-place computation
+};
+
 }  // namespace caffe
 
 #endif  // CAFFE_NEURON_LAYERS_HPP_

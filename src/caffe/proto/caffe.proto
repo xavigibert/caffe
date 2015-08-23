@@ -395,6 +395,8 @@ message LayerParameter {
   optional PartExtParameter part_ext_param = 137;
   // (XGS) Dictionary sparse coding layer
   optional DictionaryParameter dictionary_param = 138;
+  // (XGS) Multiple Kernel Learning layer
+  optional MklParameter mkl_param = 139;
 }
 
 // Message that stores parameters used to apply transformation
@@ -1212,4 +1214,18 @@ message PReLUParameter {
   optional FillerParameter filler = 1;
   // Whether or not slope paramters are shared across channels.
   optional bool channel_shared = 2 [default = false];
+}
+
+message MklParameter {
+  // Multiple Kernel Learning paramters
+  // Kernel types
+  enum KernelType {
+    POLYNOMIAL = 0;
+  }
+  optional KernelType kernel_type = 1 [default = POLYNOMIAL];
+  // Degree (number of kernels). This includes the constant term of the
+  // polynomial kernel, so the default includes terms (1,x,x^2,x^3,x^4)
+  optional uint32 degree = 2 [default = 5];
+  // Whether or not kernel paramters are shared across channels.
+  optional bool channel_shared = 3 [default = false];
 }
