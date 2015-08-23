@@ -127,6 +127,7 @@ void MklLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     Dtype* coeff_diff = this->blobs_[0]->mutable_cpu_diff();
     for (int i = 0; i < count; ++i) {
       int c = (i / dim) % channels / div_factor;
+      const Dtype* weights = coeff_data + c*degree_;
       Dtype* diff = coeff_diff + c*degree_;
       //Dtype pow_x = Dtype(1);  // x^d
 //      for (int d = 0; d < degree_; ++d) {
@@ -134,9 +135,9 @@ void MklLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
 //        pow_x *= bottom_data[i];
 //      }
       diff[0] += top_diff[i];
-      diff[1] += top_diff[i] * weights[0];
+      //diff[1] += top_diff[i] * bottom_data[i];
       for (int d = 2; d < degree_; ++d)
-        diff[d] += Dtype(d) * bottom_data[i] * pow(weights[d] * bottom_data[i], Dtype(d-1));
+        diff[d] += top_diff[i] * Dtype(d) * bottom_data[i] * pow(weights[d] * bottom_data[i], Dtype(d-1));
     }
   }
   // Propagate to bottom

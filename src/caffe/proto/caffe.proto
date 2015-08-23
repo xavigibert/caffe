@@ -1225,7 +1225,7 @@ message MklParameter {
   optional KernelType kernel_type = 1 [default = POLYNOMIAL];
   // Degree (number of kernels). This includes the constant term of the
   // polynomial kernel, so the default includes terms (1,x,x^2,x^3,x^4)
-  optional uint32 degree = 2 [default = 5];
+  optional uint32 degree = 2 [default = 3];
   // Whether or not kernel paramters are shared across channels.
   optional bool channel_shared = 3 [default = false];
 }
