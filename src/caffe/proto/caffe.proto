@@ -1228,4 +1228,6 @@ message MklParameter {
   optional uint32 degree = 2 [default = 3];
   // Whether or not kernel paramters are shared across channels.
   optional bool channel_shared = 3 [default = false];
+  // Nominal slope for negative side
+  optional float neg_slope = 4 [default = 0.25];
 }

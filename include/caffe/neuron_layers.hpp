@@ -842,8 +842,8 @@ class MklLayer : public NeuronLayer<Dtype> {
    */
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
-  //virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
-  //    const vector<Blob<Dtype>*>& top);
+  virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
 
   /**
    * @brief Computes the error gradient w.r.t. the Mkl inputs.
@@ -875,12 +875,13 @@ class MklLayer : public NeuronLayer<Dtype> {
    */
   virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
-  //virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
-  //    const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 
   MklParameter_KernelType kernel_type_;
   int degree_;
   bool channel_shared_;
+  float neg_slope_;         // Negative slope for leaky rectifier
   Blob<Dtype> multiplier_;  // dot multiplier for backward computation of params
   Blob<Dtype> backward_buff_;  // temporary buffer for backward computation
   Blob<Dtype> bottom_memory_;  // memory for in-place computation
