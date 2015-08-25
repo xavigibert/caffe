@@ -62,8 +62,8 @@ void MklLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       this->blobs_[0].reset(new Blob<Dtype>(vector<int>(dim, dim+2)));
     }
     // Fill coefficients
-    //const double def_coeffs[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
-    const double def_coeffs[5] = {0.001, 0.0011, 0.0012, 0.0013, 0.0014};
+    const double def_coeffs[5] = {0.0, 0.0, 0.0, 0.0, 0.0};
+    //const double def_coeffs[5] = {0.001, 0.0011, 0.0012, 0.0013, 0.0014};
     Dtype* coeffs = this->blobs_[0]->mutable_cpu_data();
     const int num_vects = channel_shared_ ? 1 : channels;
     for (int c = 0; c < num_vects; ++c) {
@@ -102,9 +102,9 @@ template <typename Dtype>
 void MklLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
   // DEBUG
-  save_to_matlab("mat_cpu_fwd_x0.bin", bottom[0]->cpu_data(), bottom[0]->width(), bottom[0]->width() * bottom[0]->channels());
-  //save_to_matlab("mat_cpu_fwd_x95.bin", bottom[0]->cpu_data() + bottom[0]->offset(95), bottom[0]->width(), bottom[0]->width() * bottom[0]->channels());
-  save_to_matlab("mat_cpu_fwd_coeff.bin", this->blobs_[0]->cpu_data(), degree_, (channel_shared_ ? 1 : bottom[0]->channels()));
+//  save_to_matlab("mat_cpu_fwd_x0.bin", bottom[0]->cpu_data(), bottom[0]->width(), bottom[0]->width() * bottom[0]->channels());
+//  save_to_matlab("mat_cpu_fwd_x95.bin", bottom[0]->cpu_data() + bottom[0]->offset(95), bottom[0]->width(), bottom[0]->width() * bottom[0]->channels());
+//  save_to_matlab("mat_cpu_fwd_coeff.bin", this->blobs_[0]->cpu_data(), degree_, (channel_shared_ ? 1 : bottom[0]->channels()));
   // END DEBUG
   const Dtype* bottom_data = bottom[0]->cpu_data();
   Dtype* top_data = top[0]->mutable_cpu_data();
@@ -140,8 +140,8 @@ void MklLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     }
   }
   // DEBUG
-  save_to_matlab("mat_cpu_fwd_y0.bin", top[0]->cpu_data(), top[0]->width(), top[0]->width() * top[0]->channels());
-  //save_to_matlab("mat_cpu_fwd_y95.bin", top[0]->cpu_data() + top[0]->offset(95), top[0]->width(), top[0]->width() * top[0]->channels());
+//  save_to_matlab("mat_cpu_fwd_y0.bin", top[0]->cpu_data(), top[0]->width(), top[0]->width() * top[0]->channels());
+//  save_to_matlab("mat_cpu_fwd_y95.bin", top[0]->cpu_data() + top[0]->offset(95), top[0]->width(), top[0]->width() * top[0]->channels());
   // END DEBUG
 }
 
@@ -150,13 +150,13 @@ void MklLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     const vector<bool>& propagate_down,
     const vector<Blob<Dtype>*>& bottom) {
   // DEBUG
-  save_to_matlab("mat_cpu_bwd_x0.bin", bottom_memory_.cpu_data(), bottom[0]->width(), bottom[0]->width() * bottom[0]->channels());
-  //save_to_matlab("mat_cpu_bwd_x95.bin", bottom_memory_.cpu_data() + bottom[0]->offset(95), bottom[0]->width(), bottom[0]->width() * bottom[0]->channels());
-  save_to_matlab("mat_cpu_bwd_coeff.bin", this->blobs_[0]->cpu_data(), degree_, (channel_shared_ ? 1 : bottom[0]->channels()));
-  save_to_matlab("mat_cpu_bwd_y0.bin", top[0]->cpu_data(), top[0]->width(), top[0]->width() * top[0]->channels());
-  //save_to_matlab("mat_cpu_bwd_y95.bin", top[0]->cpu_data() + top[0]->offset(95), top[0]->width(), top[0]->width() * top[0]->channels());
-  save_to_matlab("mat_cpu_bwd_dy0.bin", top[0]->cpu_diff(), top[0]->width(), top[0]->width() * top[0]->channels());
-  //save_to_matlab("mat_cpu_bwd_dy95.bin", top[0]->cpu_diff() + top[0]->offset(95), top[0]->width(), top[0]->width() * top[0]->channels());
+//  save_to_matlab("mat_cpu_bwd_x0.bin", bottom_memory_.cpu_data(), bottom[0]->width(), bottom[0]->width() * bottom[0]->channels());
+//  save_to_matlab("mat_cpu_bwd_x95.bin", bottom_memory_.cpu_data() + bottom[0]->offset(95), bottom[0]->width(), bottom[0]->width() * bottom[0]->channels());
+//  save_to_matlab("mat_cpu_bwd_coeff.bin", this->blobs_[0]->cpu_data(), degree_, (channel_shared_ ? 1 : bottom[0]->channels()));
+//  save_to_matlab("mat_cpu_bwd_y0.bin", top[0]->cpu_data(), top[0]->width(), top[0]->width() * top[0]->channels());
+//  save_to_matlab("mat_cpu_bwd_y95.bin", top[0]->cpu_data() + top[0]->offset(95), top[0]->width(), top[0]->width() * top[0]->channels());
+//  save_to_matlab("mat_cpu_bwd_dy0.bin", top[0]->cpu_diff(), top[0]->width(), top[0]->width() * top[0]->channels());
+//  save_to_matlab("mat_cpu_bwd_dy95.bin", top[0]->cpu_diff() + top[0]->offset(95), top[0]->width(), top[0]->width() * top[0]->channels());
   // END DEBUG
   const Dtype* bottom_data = bottom[0]->cpu_data();
   const Dtype* coeff_data = this->blobs_[0]->cpu_data();
@@ -205,6 +205,16 @@ void MklLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
         d3[c] += dy * Dtype(2) * x * x * w3[c];
         d4[c] += dy * x;
       }
+      // DEBUG
+//      if ((i+1) % top[0]->offset(1) == 0) {
+//        int n = (i+1) / top[0]->offset(1)- 1;
+//        if (n<10) {
+//          char s[64];
+//          sprintf(s, "mat_cpu_bwd_dcoeff%d.bin", n);
+//          save_to_matlab(s, this->blobs_[0]->cpu_diff(), degree_, (channel_shared_ ? 1 : bottom[0]->channels()));
+//        }
+//      }
+      // END DEBUG
     }
   }
   // Propagate to bottom
@@ -224,11 +234,11 @@ void MklLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     }
   }
   // DEBUG
-  save_to_matlab("mat_cpu_bwd_dcoeff.bin", this->blobs_[0]->cpu_diff(), degree_, (channel_shared_ ? 1 : bottom[0]->channels()));
-  save_to_matlab("mat_cpu_bwd_dx0.bin", bottom[0]->cpu_diff(), bottom[0]->width(), bottom[0]->width() * bottom[0]->channels());
-  //save_to_matlab("mat_cpu_bwd_dx95.bin", bottom[0]->cpu_diff() + bottom[0]->offset(95), bottom[0]->width(), bottom[0]->width() * bottom[0]->channels());
+//  save_to_matlab("mat_cpu_bwd_dcoeff.bin", this->blobs_[0]->cpu_diff(), degree_, (channel_shared_ ? 1 : bottom[0]->channels()));
+//  save_to_matlab("mat_cpu_bwd_dx0.bin", bottom[0]->cpu_diff(), bottom[0]->width(), bottom[0]->width() * bottom[0]->channels());
+//  save_to_matlab("mat_cpu_bwd_dx95.bin", bottom[0]->cpu_diff() + bottom[0]->offset(95), bottom[0]->width(), bottom[0]->width() * bottom[0]->channels());
+//  LOG(FATAL) << "FIX ME!";
   // END DEBUG
-  LOG(FATAL) << "FIX ME!";
 }
 
 
