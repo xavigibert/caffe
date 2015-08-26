@@ -253,7 +253,7 @@ layer {
     name: \"conv4_w\"
     lr_mult: 1
     lr_pre_mult: 0.02
-    decay_mult: 1
+    decay_mult: 10
   }
   param {
     name: \"conv4_b\"
@@ -307,7 +307,7 @@ layer {
   top: \"ip5_${TASK}_${CL}\"
   param {
     lr_mult: 0.1
-    decay_mult: 20
+    decay_mult: 100
   }
   param {
     lr_mult: 0.2
