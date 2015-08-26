@@ -432,7 +432,7 @@ layer {
   param {
     name: "conv4_w"
     lr_mult: 1
-    decay_mult: 1
+    decay_mult: 10
   }
   param {
     name: "conv4_b"
