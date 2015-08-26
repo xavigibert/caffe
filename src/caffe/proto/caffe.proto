@@ -397,6 +397,8 @@ message LayerParameter {
   optional DictionaryParameter dictionary_param = 138;
   // (XGS) Multiple Kernel Learning layer
   optional MklParameter mkl_param = 139;
+  // (XGS) Amtrak fastener ROC accuracy layer
+  optional FastenerRoc fastenerroc_param = 140;
 }
 
 // Message that stores parameters used to apply transformation
@@ -1205,7 +1207,6 @@ message V0LayerParameter {
 
   optional HDF5OutputParameter hdf5_output_param = 1001;
 }
-
 message PReLUParameter {
   // Parametric ReLU described in K. He et al, Delving Deep into Rectifiers:
   // Surpassing Human-Level Performance on ImageNet Classification, 2015.
@@ -1230,4 +1231,10 @@ message MklParameter {
   optional bool channel_shared = 3 [default = false];
   // Nominal slope for negative side
   optional float neg_slope = 4 [default = 0.25];
+}
+
+message FastenerRoc {
+  // Compute PD at the desired PFA after num_samples samples
+  optional int32 num_samples = 1;
+  repeated float desired_pfa = 2;
 }

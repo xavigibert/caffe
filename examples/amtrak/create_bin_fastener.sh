@@ -5,23 +5,25 @@
 SLIST="0 1 2 3 4"
 TLIST="fastVsBg fastVsFast"
 CLIST="00 01 02 03 04 05 06 07 08 09 10 11 12 13 14 15"
-
-for SI in $SLIST; do
-for TASK in $TLIST; do
-for CL in $CLIST; do
-
 EXAMPLE=examples/amtrak
 DATA=data/amtrak
 BUILD=build/examples/amtrak
 NUMFILES=5
+BACKEND="lmdb"
+NUMBGTESTS=200
+DOBUILDDB=0
+
+if [ ${DOBUILDDB} != 0 ]; then
+for SI in $SLIST; do
+for TASK in $TLIST; do
+for CL in $CLIST; do
+
 NUMTRAIN=(A A A A A)
 NUMTRAIN[$SI]=0
 NUMTEST=(0 0 0 0 0)
 NUMTEST[$SI]=400
 IMAGES="$DATA/${TASK}_0_${CL}-images-idx3-ubyte $DATA/${TASK}_1_${CL}-images-idx3-ubyte $DATA/${TASK}_2_${CL}-images-idx3-ubyte $DATA/${TASK}_3_${CL}-images-idx3-ubyte $DATA/${TASK}_4_${CL}-images-idx3-ubyte"
 LABELS="$DATA/${TASK}_0_${CL}-labels-idx1-ubyte $DATA/${TASK}_1_${CL}-labels-idx1-ubyte $DATA/${TASK}_2_${CL}-labels-idx1-ubyte $DATA/${TASK}_3_${CL}-labels-idx1-ubyte $DATA/${TASK}_4_${CL}-labels-idx1-ubyte "
-
-BACKEND="lmdb"
 
 DBTRAIN=$EXAMPLE/db_${TASK}_${CL}_train${SI}
 DBTEST=$EXAMPLE/db_${TASK}_${CL}_test${SI}
@@ -38,6 +40,10 @@ $BUILD/convert_amtrak_data.bin $NUMFILES ${IMAGES} ${LABELS} ${NUMTEST[*]} $DBTE
 done
 done
 done
+fi
+
+# Network parameters
+PROPDOWN4=false
 
 # Create protocol
 cp ${EXAMPLE}/amtrak_dual_train_test.prototxt ${EXAMPLE}/amtrak_tri_train_test.prototxt
@@ -242,6 +248,7 @@ layer {
   type: \"Convolution\"
   bottom: \"pool3_${TASK}_${CL}\"
   top: \"conv4_${TASK}_${CL}\"
+  propagate_down: ${PROPDOWN4}
   param {
     name: \"conv4_w\"
     lr_mult: 1
@@ -335,6 +342,21 @@ layer {
   top: \"loss_${TASK}_${CL}\"
 }
 ">>${EXAMPLE}/amtrak_tri_train_test.prototxt
+done
+done
+
+# Custom test accuracy task
+
+echo "# Custom accuracy layer
+layer {
+  name: fastenerRoc
+  num_samples: ${}
+for TASK in $TLIST; do
+for CL in $CLIST; do
+
+echo "  bottom: \"ip5_${TASK}_${CL}\"
+  bottom: \"label_${TASK}_${CL}\"">>${EXAMPLE}/amtrak_tri_train_test.prototxt
+
 done
 done
 
