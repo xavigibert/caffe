@@ -763,6 +763,52 @@ class SoftmaxWithLossLayer : public LossLayer<Dtype> {
   int softmax_axis_, outer_num_, inner_num_;
 };
 
+/**
+ * @brief Computes the classification accuracy for a one-of-many
+ *        classification task.
+ */
+template <typename Dtype>
+class FastenerRocLayer : public Layer<Dtype> {
+ public:
+  /**
+   * @param param provides FastenerRocParameter fastenerroc_param,
+   *     with FastenerRocLayer options:
+   */
+  explicit FastenerRocLayer(const LayerParameter& param)
+      : Layer<Dtype>(param) {}
+  virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+  virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+
+  virtual inline const char* type() const { return "FastenerRoc"; }
+  virtual inline int MinBottomBlobs() const { return 2; }
+  virtual inline int ExactNumTopBlobs() const { return 1; }
+
+ protected:
+  virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+
+
+  /// @brief Not implemented -- FastenerRocLayer cannot be used as a loss.
+  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
+    for (int i = 0; i < propagate_down.size(); ++i) {
+      if (propagate_down[i]) { NOT_IMPLEMENTED; }
+    }
+  }
+
+  int num_classes_;
+  int num_good_;
+  int num_classes_ext_;
+  int eof_marker_;
+  double desired_pfa_;
+  double computed_pd_;
+
+  std::vector<std::pair<double,int> > samples_;  // Vector of class/score pairs
+};
+
+
 }  // namespace caffe
 
 #endif  // CAFFE_LOSS_LAYERS_HPP_

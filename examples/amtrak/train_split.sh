@@ -23,10 +23,13 @@ for TASK in $TLIST; do
   done
 done
 
+rm examples/amtrak/db_fastVsBg_test
+ln -s -f db_fastVsBg_test$1 examples/amtrak/db_fastVsBg_test
+
 ./build/tools/caffe train --gpu=$2 --solver=examples/amtrak/amtrak_tri_solver.prototxt
 # ./build/tools/caffe train --gpu=$2 --solver=examples/amtrak/amtrak_dual_solver.prototxt
-mv examples/amtrak/net_iter_300000.caffemodel examples/amtrak/net$1_iter_300000.caffemodel
-mv examples/amtrak/net_iter_300000.solverstate examples/amtrak/net$1_iter_300000.solverstate
+mv examples/amtrak/net_iter_30000.caffemodel examples/amtrak/net$1_iter_30000.caffemodel
+mv examples/amtrak/net_iter_30000.solverstate examples/amtrak/net$1_iter_30000.solverstate
 
 else
     echo "Must specify parameter indicating split idx"

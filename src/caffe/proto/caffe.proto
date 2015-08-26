@@ -398,7 +398,7 @@ message LayerParameter {
   // (XGS) Multiple Kernel Learning layer
   optional MklParameter mkl_param = 139;
   // (XGS) Amtrak fastener ROC accuracy layer
-  optional FastenerRoc fastenerroc_param = 140;
+  optional FastenerRocParameter fastenerroc_param = 140;
 }
 
 // Message that stores parameters used to apply transformation
@@ -1233,8 +1233,11 @@ message MklParameter {
   optional float neg_slope = 4 [default = 0.25];
 }
 
-message FastenerRoc {
-  // Compute PD at the desired PFA after num_samples samples
-  optional int32 num_samples = 1;
-  repeated float desired_pfa = 2;
+message FastenerRocParameter {
+  // Compute PD at the desired PFA after finding the eof_marker marker
+  optional int32 num_classes = 1 [default = 11];
+  optional int32 num_good = 2 [default = 7];
+  optional int32 num_classes_ext = 3 [default = 16];
+  optional int32 eof_marker = 4 [default = -2];
+  optional float desired_pfa = 5 [default = 0.002];
 }

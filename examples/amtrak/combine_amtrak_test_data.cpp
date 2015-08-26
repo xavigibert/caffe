@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
   const char* src_image_template = "%s/fastVsBg_%d_%02d-images-idx3-ubyte";
   const char* src_label_template = "%s/fastVsBg_%d_%02d-labels-idx1-ubyte";
   const char* dst_image_template = "examples/amtrak/test%d_fastVsBg-images-idx3-ubyte";
-  const char* dst_label_template = "examples/amtrak/test%d_fastVsBg-labels-idx3-ubyte";
+  const char* dst_label_template = "examples/amtrak/test%d_fastVsBg-labels-idx1-ubyte";
 
   // Read header from first image file
   char fname[256];
@@ -144,7 +144,7 @@ int main(int argc, char** argv) {
       uint64_t checksum = 0;
       uint64_t* tmp = reinterpret_cast<uint64_t*>(buffer);
       for( int j = 0; j < rows*cols/8; ++j ) {
-        checksum += tmp[j];
+        checksum += (tmp[j]*j);
       }
       // Translate label
       label = (label == 0)  ? -1 : clIdx;
@@ -169,8 +169,14 @@ int main(int argc, char** argv) {
     LOG(INFO) << "Class " << clIdx << " has " << cnt_fg << " positive samples";
   }
 
+  // Create dummy sample to indicate end of test set
+  memset(buffer, 0, rows*cols);
+  char label = -2;
+  dst_label_file.write(&label, 1);
+  dst_image_file.write(buffer, rows*cols);
+
   // Change num_items
-  num_items = swap_endian(cnt_saved);
+  num_items = swap_endian(cnt_saved+1);
   dst_label_file.seekp(4, std::ios_base::beg);
   dst_label_file.write(reinterpret_cast<const char*>(&num_items), 4);
   dst_image_file.seekp(4, std::ios_base::beg);
