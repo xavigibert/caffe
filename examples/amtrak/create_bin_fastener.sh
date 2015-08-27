@@ -376,7 +376,7 @@ layer {
   top: \"data_roc\"
   top: \"label_roc\"
   data_param {
-    source: \"data/amtrak/db_fastVsBg_test\"
+    source: \"examples/amtrak/db_fastVsBg_test\"
     source_map: \"data/amtrak/test0_fastVsBg-images-idx3-ubyte\"
     source_map: \"data/amtrak/test1_fastVsBg-images-idx3-ubyte\"
     source_map: \"data/amtrak/test2_fastVsBg-images-idx3-ubyte\"
