@@ -30,6 +30,10 @@ uint32_t swap_endian(uint32_t val) {
 }
 
 int main(int argc, char** argv) {
+#ifndef GFLAGS_GFLAGS_H_
+  namespace gflags = google;
+#endif
+
   // Print output to stderr (while still logging).
   FLAGS_alsologtostderr = 1;
 
