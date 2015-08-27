@@ -10,7 +10,7 @@ DATA=data/amtrak
 BUILD=build/examples/amtrak
 NUMFILES=5
 BACKEND="lmdb"
-DOBUILDDB=1
+DOBUILDDB=0
 
 if [ ${DOBUILDDB} != 0 ]; then
 for SI in $SLIST; do
@@ -362,7 +362,7 @@ layer {
   type: \"HingeLoss\"
   bottom: \"ip5_${TASK}_${CL}\"
   bottom: \"label_${TASK}_${CL}\"
-  top: \"loss_${TASK}_${CL}\"
+#  top: \"loss_${TASK}_${CL}\"
 }
 ">>${EXAMPLE}/amtrak_tri_train_test.prototxt
 done
@@ -395,6 +395,32 @@ layer {
   include: { phase: TEST }
 }
 layer {
+  name: \"data_roc\"
+  type: \"DummyData\"
+  top: \"data_roc\"
+  dummy_data_param: {
+    shape: {
+      dim: 1
+      dim: 1
+      dim: 182
+      dim: 182
+    }
+  }
+  include: { phase: TRAIN }
+}
+layer {
+  name: \"label_roc\"
+  type: \"DummyData\"
+  top: \"label_roc\"
+  dummy_data_param: {
+    shape: {
+      dim: 1
+      dim: 1
+    }
+  }
+  include: { phase: TRAIN }
+}
+layer {
   name: \"conv1_roc\"
   type: \"Convolution\"
   bottom: \"data_roc\"
@@ -424,7 +450,6 @@ layer {
       value: 0
     }
   }
-  include: { phase: TEST }
 }
 layer {
   name: \"pool1_roc\"
@@ -436,7 +461,6 @@ layer {
     kernel_size: 3
     stride: 2
   }
-  include: { phase: TEST }
 }
 layer {
   name: \"conv2_roc\"
@@ -468,14 +492,12 @@ layer {
       value: 0
     }
   }
-  include: { phase: TEST }
 }
 layer {
   name: \"relu2_roc\"
   type: \"ReLU\"
   bottom: \"conv2_roc\"
   top: \"conv2_roc\"
-  include: { phase: TEST }
 }
 layer {
   name: \"pool2_roc\"
@@ -487,7 +509,6 @@ layer {
     kernel_size: 3
     stride: 2
   }
-  include: { phase: TEST }
 }
 layer {
   name: \"conv3_roc\"
@@ -518,14 +539,12 @@ layer {
       value: 0
     }
   }
-  include: { phase: TEST }
 }
 layer {
   name: \"relu3_roc\"
   type: \"ReLU\"
   bottom: \"conv3_roc\"
   top: \"conv3_roc\"
-  include: { phase: TEST }
 }
 layer {
   name: \"drop3_roc\"
@@ -535,7 +554,6 @@ layer {
   dropout_param {
     dropout_ratio: 0.1
   }
-  include: { phase: TEST }
 }
 layer {
   name: \"pool3_roc\"
@@ -547,7 +565,6 @@ layer {
     kernel_size: 3
     stride: 2
   }
-  include: { phase: TEST }
 }
 layer {
   name: \"conv4_roc\"
@@ -578,14 +595,12 @@ layer {
       value: 0
     }
   }
-  include: { phase: TEST }
 }
 layer {
   name: \"relu4_roc\"
   type: \"ReLU\"
   bottom: \"conv4_roc\"
   top: \"conv4_roc\"
-  include: { phase: TEST }
 }
 layer {
   name: \"drop4_roc\"
@@ -595,7 +610,6 @@ layer {
   dropout_param {
     dropout_ratio: 0.2
   }
-  include: { phase: TEST }
 }
 layer {
   name: \"pool4_roc\"
@@ -607,7 +621,6 @@ layer {
     kernel_size: 3
     stride: 2
   }
-  include: { phase: TEST }
 }">>${EXAMPLE}/amtrak_tri_train_test.prototxt
 
 for TASK in $TLIST; do
@@ -639,7 +652,15 @@ echo "layer {
       value: 0
     }
   }
-  include: { phase: TEST }
+}
+layer {
+  name: \"loss_${TASK}_${CL}_roc\"
+  type: \"HingeLoss\"
+  propagate_down: false
+  propagate_down: false
+  bottom: \"ip5_${TASK}_${CL}_roc\"
+  bottom: \"label_roc\"
+#  top: \"loss_${TASK}_${CL}_roc\"
 }">>${EXAMPLE}/amtrak_tri_train_test.prototxt
 done
 done
@@ -656,7 +677,8 @@ done
 done
 
 echo "  bottom: \"label_roc\"
-  top: \"fastener_roc\"
+  top: \"fastener_auc\"
+  top: \"fastener_pd\"
   include: { phase: TEST }
 }">>${EXAMPLE}/amtrak_tri_train_test.prototxt
 
