@@ -10,7 +10,7 @@ DATA=data/amtrak
 BUILD=build/examples/amtrak
 NUMFILES=5
 BACKEND="lmdb"
-DOBUILDDB=0
+DOBUILDDB=1
 
 if [ ${DOBUILDDB} != 0 ]; then
 for SI in $SLIST; do
@@ -24,10 +24,10 @@ NUMTEST[$SI]=400
 IMAGES="$DATA/${TASK}_0_${CL}-images-idx3-ubyte $DATA/${TASK}_1_${CL}-images-idx3-ubyte $DATA/${TASK}_2_${CL}-images-idx3-ubyte $DATA/${TASK}_3_${CL}-images-idx3-ubyte $DATA/${TASK}_4_${CL}-images-idx3-ubyte"
 LABELS="$DATA/${TASK}_0_${CL}-labels-idx1-ubyte $DATA/${TASK}_1_${CL}-labels-idx1-ubyte $DATA/${TASK}_2_${CL}-labels-idx1-ubyte $DATA/${TASK}_3_${CL}-labels-idx1-ubyte $DATA/${TASK}_4_${CL}-labels-idx1-ubyte "
 
-DBTRAIN=$EXAMPLE/db_${TASK}_${CL}_train${SI}
-DBTEST=$EXAMPLE/db_${TASK}_${CL}_test${SI}
+DBTRAIN=$DATA/db_${TASK}_${CL}_train${SI}
+DBTEST=$DATA/db_${TASK}_${CL}_test${SI}
 
-echo "Creating ${BACKEND} ${DBTRAIN}/${DBTEST} ..."
+echo "Creating ${BACKEND} ${DBTRAIN} and ${DBTEST} ..."
 
 rm -rf $DBTRAIN
 rm -rf $DBTEST
@@ -46,10 +46,10 @@ for SI in $SLIST; do
 NUMTEST=(0 0 0 0 0)
 NUMTEST[$SI]=A
 
-IMAGES="$EXAMPLE/test0_fastVsBg-images-idx3-ubyte $EXAMPLE/test1_fastVsBg-images-idx3-ubyte $EXAMPLE/test2_fastVsBg-images-idx3-ubyte $EXAMPLE/test3_fastVsBg-images-idx3-ubyte $EXAMPLE/test4_fastVsBg-images-idx3-ubyte"
-LABELS="$EXAMPLE/test0_fastVsBg-labels-idx1-ubyte $EXAMPLE/test1_fastVsBg-labels-idx1-ubyte $EXAMPLE/test2_fastVsBg-labels-idx1-ubyte $EXAMPLE/test3_fastVsBg-labels-idx1-ubyte $EXAMPLE/test4_fastVsBg-labels-idx1-ubyte"
+IMAGES="$DATA/test0_fastVsBg-images-idx3-ubyte $DATA/test1_fastVsBg-images-idx3-ubyte $DATA/test2_fastVsBg-images-idx3-ubyte $DATA/test3_fastVsBg-images-idx3-ubyte $DATA/test4_fastVsBg-images-idx3-ubyte"
+LABELS="$DATA/test0_fastVsBg-labels-idx1-ubyte $DATA/test1_fastVsBg-labels-idx1-ubyte $DATA/test2_fastVsBg-labels-idx1-ubyte $DATA/test3_fastVsBg-labels-idx1-ubyte $DATA/test4_fastVsBg-labels-idx1-ubyte"
 
-DBTEST=$EXAMPLE/db_fastVsBg_test${SI}
+DBTEST=$DATA/db_fastVsBg_test${SI}
 
 echo "Creating ${BACKEND} ${DBTEST} ..."
 
@@ -77,7 +77,7 @@ layer {
   top: \"data_${TASK}_${CL}\"
   top: \"label_${TASK}_${CL}\"
   data_param {
-    source: \"examples/amtrak/db_${TASK}_${CL}_train\"
+    source: \"data/amtrak/db_${TASK}_${CL}_train\"
     source_map: \"data/amtrak/${TASK}_0_${CL}-images-idx3-ubyte\"
     source_map: \"data/amtrak/${TASK}_1_${CL}-images-idx3-ubyte\"
     source_map: \"data/amtrak/${TASK}_2_${CL}-images-idx3-ubyte\"
@@ -101,7 +101,7 @@ layer {
   top: \"data_${TASK}_${CL}\"
   top: \"label_${TASK}_${CL}\"
   data_param {
-    source: \"examples/amtrak/db_${TASK}_${CL}_test\"
+    source: \"data/amtrak/db_${TASK}_${CL}_test\"
     source_map: \"data/amtrak/${TASK}_0_${CL}-images-idx3-ubyte\"
     source_map: \"data/amtrak/${TASK}_1_${CL}-images-idx3-ubyte\"
     source_map: \"data/amtrak/${TASK}_2_${CL}-images-idx3-ubyte\"
@@ -376,12 +376,12 @@ layer {
   top: \"data_roc\"
   top: \"label_roc\"
   data_param {
-    source: \"examples/amtrak/db_fastVsBg_test\"
-    source_map: \"examples/amtrak/test0_fastVsBg-images-idx3-ubyte\"
-    source_map: \"examples/amtrak/test1_fastVsBg-images-idx3-ubyte\"
-    source_map: \"examples/amtrak/test2_fastVsBg-images-idx3-ubyte\"
-    source_map: \"examples/amtrak/test3_fastVsBg-images-idx3-ubyte\"
-    source_map: \"examples/amtrak/test4_fastVsBg-images-idx3-ubyte\"
+    source: \"data/amtrak/db_fastVsBg_test\"
+    source_map: \"data/amtrak/test0_fastVsBg-images-idx3-ubyte\"
+    source_map: \"data/amtrak/test1_fastVsBg-images-idx3-ubyte\"
+    source_map: \"data/amtrak/test2_fastVsBg-images-idx3-ubyte\"
+    source_map: \"data/amtrak/test3_fastVsBg-images-idx3-ubyte\"
+    source_map: \"data/amtrak/test4_fastVsBg-images-idx3-ubyte\"
     backend: LMDB_FILE
     batch_size: 15
   }

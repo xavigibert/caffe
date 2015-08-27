@@ -6,7 +6,7 @@ layer {
   top: "data_t"
   top: "label_t"
   data_param {
-    source: "examples/amtrak/db_text_train_lmdb"
+    source: "data/amtrak/db_text_train_lmdb"
     source_map: "data/amtrak/split0-images-idx3-ubyte"
     source_map: "data/amtrak/split1-images-idx3-ubyte"
     source_map: "data/amtrak/split2-images-idx3-ubyte"
@@ -30,7 +30,7 @@ layer {
   top: "data_t"
   top: "label_t"
   data_param {
-    source: "examples/amtrak/db_text_test_lmdb"
+    source: "data/amtrak/db_text_test_lmdb"
     source_map: "data/amtrak/split0-images-idx3-ubyte"
     source_map: "data/amtrak/split1-images-idx3-ubyte"
     source_map: "data/amtrak/split2-images-idx3-ubyte"
@@ -54,7 +54,7 @@ layer {
   top: "data_f"
   top: "label_f"
   data_param {
-    source: "examples/amtrak/db_fast_train_lmdb"
+    source: "data/amtrak/db_fast_train_lmdb"
     source_map: "data/amtrak/fast0-images-idx3-ubyte"
     source_map: "data/amtrak/fast1-images-idx3-ubyte"
     source_map: "data/amtrak/fast2-images-idx3-ubyte"
@@ -78,7 +78,7 @@ layer {
   top: "data_f"
   top: "label_f"
   data_param {
-    source: "examples/amtrak/db_fast_test_lmdb"
+    source: "data/amtrak/db_fast_test_lmdb"
     source_map: "data/amtrak/fast0-images-idx3-ubyte"
     source_map: "data/amtrak/fast1-images-idx3-ubyte"
     source_map: "data/amtrak/fast2-images-idx3-ubyte"
