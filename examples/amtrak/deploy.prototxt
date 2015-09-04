@@ -189,7 +189,7 @@ layer {
     decay_mult: 0
   }
   convolution_param {
-    num_output: 16
+    num_output: 512
     kernel_size: 5
     weight_filler {
       type: "gaussian"
@@ -260,25 +260,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsBg_00"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -288,25 +272,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsBg_01"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -316,25 +284,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsBg_02"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -344,25 +296,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsBg_03"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -372,25 +308,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsBg_04"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -400,25 +320,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsBg_05"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -428,25 +332,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsBg_06"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -456,25 +344,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsBg_07"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -484,25 +356,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsBg_08"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -512,25 +368,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsBg_09"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -540,25 +380,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsBg_10"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -568,25 +392,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsBg_11"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -596,25 +404,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsBg_12"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -624,25 +416,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsBg_13"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -652,25 +428,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsBg_14"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -680,25 +440,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsBg_15"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -708,25 +452,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsFast_00"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -736,25 +464,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsFast_01"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -764,25 +476,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsFast_02"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -792,25 +488,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsFast_03"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -820,25 +500,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsFast_04"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -848,25 +512,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsFast_05"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -876,25 +524,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsFast_06"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -904,25 +536,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsFast_07"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -932,25 +548,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsFast_08"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -960,25 +560,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsFast_09"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -988,25 +572,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsFast_10"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -1016,25 +584,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsFast_11"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -1044,25 +596,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsFast_12"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -1072,25 +608,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsFast_13"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -1100,25 +620,9 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsFast_14"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
 
@@ -1128,24 +632,8 @@ layer {
   type: "Convolution"
   bottom: "pool4_f"
   top: "ip5_fastVsFast_15"
-  param {
-    lr_mult: 0.1
-    decay_mult: 20
-  }
-  param {
-    lr_mult: 0.2
-    decay_mult: 0
-  }
   convolution_param {
     num_output: 2
     kernel_size: 1
-    weight_filler {
-      type: "gaussian"
-      std: 0.01
-    }
-    bias_filler {
-      type: "constant"
-      value: 0
-    }
   }
 }
