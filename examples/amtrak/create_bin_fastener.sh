@@ -10,7 +10,7 @@ DATA=data/amtrak
 BUILD=build/examples/amtrak
 NUMFILES=5
 BACKEND="lmdb"
-DOBUILDDB=1
+DOBUILDDB=0
 
 if [ ${DOBUILDDB} != 0 ]; then
 for SI in $SLIST; do
@@ -46,8 +46,8 @@ for SI in $SLIST; do
 NUMTEST=(0 0 0 0 0)
 NUMTEST[$SI]=A
 
-IMAGES="$DATA/test0_fastVsBg-images-idx3-ubyte $DATA/test1_fastVsBg-images-idx3-ubyte $DATA/test2_fastVsBg-images-idx3-ubyte $DATA/test3_fastVsBg-images-idx3-ubyte $DATA/test4_fastVsBg-images-idx3-ubyte"
-LABELS="$DATA/test0_fastVsBg-labels-idx1-ubyte $DATA/test1_fastVsBg-labels-idx1-ubyte $DATA/test2_fastVsBg-labels-idx1-ubyte $DATA/test3_fastVsBg-labels-idx1-ubyte $DATA/test4_fastVsBg-labels-idx1-ubyte"
+IMAGES="$DATA/test0-fast-images-idx3-ubyte $DATA/test1-fast-images-idx3-ubyte $DATA/test2-fast-images-idx3-ubyte $DATA/test3-fast-images-idx3-ubyte $DATA/test4-fast-images-idx3-ubyte"
+LABELS="$DATA/test0-fast-labels-idx1-ubyte $DATA/test1-fast-labels-idx1-ubyte $DATA/test2-fast-labels-idx1-ubyte $DATA/test3-fast-labels-idx1-ubyte $DATA/test4-fast-labels-idx1-ubyte"
 
 DBTEST=$DATA/db_fastVsBg_test${SI}
 
@@ -108,7 +108,7 @@ layer {
     source_map: \"data/amtrak/${TASK}_3_${CL}-images-idx3-ubyte\"
     source_map: \"data/amtrak/${TASK}_4_${CL}-images-idx3-ubyte\"
     backend: LMDB_FILE
-    batch_size: 4
+    batch_size: 2
   }
   transform_param {
     scale: 0.00390625
@@ -161,9 +161,21 @@ layer {
   }
 }
 layer {
+  name: \"norm1_${TASK}_${CL}\"
+  type: \"LRN\"
+  bottom: \"pool1_${TASK}_${CL}\"
+  top: \"norm1_${TASK}_${CL}\"
+  lrn_param {
+    local_size: 5
+    alpha: 0.001
+    beta: 0.5
+    norm_region: WITHIN_CHANNEL
+  }
+}
+layer {
   name: \"conv2_${TASK}_${CL}\"
   type: \"Convolution\"
-  bottom: \"pool1_${TASK}_${CL}\"
+  bottom: \"norm1_${TASK}_${CL}\"
   top: \"conv2_${TASK}_${CL}\"
   param {
     name: \"conv2_w\"
@@ -329,7 +341,7 @@ layer {
   param {
     name: \"ip5_${TASK}_${CL}_w\"
     lr_mult: 0.1
-    decay_mult: 100
+    decay_mult: 1000
   }
   param {
     name: \"ip5_${TASK}_${CL}_b\"
@@ -377,17 +389,16 @@ layer {
   top: \"label_roc\"
   data_param {
     source: \"examples/amtrak/db_fastVsBg_test\"
-    source_map: \"data/amtrak/test0_fastVsBg-images-idx3-ubyte\"
-    source_map: \"data/amtrak/test1_fastVsBg-images-idx3-ubyte\"
-    source_map: \"data/amtrak/test2_fastVsBg-images-idx3-ubyte\"
-    source_map: \"data/amtrak/test3_fastVsBg-images-idx3-ubyte\"
-    source_map: \"data/amtrak/test4_fastVsBg-images-idx3-ubyte\"
+    source_map: \"data/amtrak/test0-fast-images-idx3-ubyte\"
+    source_map: \"data/amtrak/test1-fast-images-idx3-ubyte\"
+    source_map: \"data/amtrak/test2-fast-images-idx3-ubyte\"
+    source_map: \"data/amtrak/test3-fast-images-idx3-ubyte\"
+    source_map: \"data/amtrak/test4-fast-images-idx3-ubyte\"
     backend: LMDB_FILE
-    batch_size: 15
+    batch_size: 2
   }
   transform_param {
     scale: 0.00390625
-    crop_size: 182
     mean_value: 96
     mirror: false
     mirror_v: false
@@ -402,8 +413,8 @@ layer {
     shape: {
       dim: 1
       dim: 1
-      dim: 182
-      dim: 182
+      dim: 400
+      dim: 240
     }
   }
   include: { phase: TRAIN }
@@ -463,9 +474,21 @@ layer {
   }
 }
 layer {
+  name: \"norm1_roc\"
+  type: \"LRN\"
+  bottom: \"pool1_roc\"
+  top: \"norm1_roc\"
+  lrn_param {
+    local_size: 5
+    alpha: 0.001
+    beta: 0.5
+    norm_region: WITHIN_CHANNEL
+  }
+}
+layer {
   name: \"conv2_roc\"
   type: \"Convolution\"
-  bottom: \"pool1_roc\"
+  bottom: \"norm1_roc\"
   top: \"conv2_roc\"
   param {
     name: \"conv2_w\"
@@ -633,7 +656,7 @@ echo "layer {
   param {
     name: \"ip5_${TASK}_${CL}_w\"
     lr_mult: 0.1
-    decay_mult: 100
+    decay_mult: 1000
   }
   param {
     name: \"ip5_${TASK}_${CL}_b\"
@@ -679,6 +702,9 @@ done
 echo "  bottom: \"label_roc\"
   top: \"fastener_auc\"
   top: \"fastener_pd\"
+  fastenerroc_param {
+    desired_pfa: 0.01
+  }
   include: { phase: TEST }
 }">>${EXAMPLE}/amtrak_tri_train_test.prototxt
 

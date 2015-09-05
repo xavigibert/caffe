@@ -13,7 +13,7 @@ layer {
     source_map: "data/amtrak/split3-images-idx3-ubyte"
     source_map: "data/amtrak/split4-images-idx3-ubyte"
     backend: LMDB_FILE
-    batch_size: 128
+    batch_size: 64
   }
   transform_param {
     scale: 0.00390625
@@ -37,7 +37,7 @@ layer {
     source_map: "data/amtrak/split3-images-idx3-ubyte"
     source_map: "data/amtrak/split4-images-idx3-ubyte"
     backend: LMDB_FILE
-    batch_size: 200
+    batch_size: 80
   }
   transform_param {
     scale: 0.00390625
@@ -61,7 +61,7 @@ layer {
     source_map: "data/amtrak/fast3-images-idx3-ubyte"
     source_map: "data/amtrak/fast4-images-idx3-ubyte"
     backend: LMDB_FILE
-    batch_size: 16
+    batch_size: 8
   }
   transform_param {
     scale: 0.00390625
@@ -85,7 +85,7 @@ layer {
     source_map: "data/amtrak/fast3-images-idx3-ubyte"
     source_map: "data/amtrak/fast4-images-idx3-ubyte"
     backend: LMDB_FILE
-    batch_size: 50
+    batch_size: 20
   }
   transform_param {
     scale: 0.00390625
@@ -137,9 +137,21 @@ layer {
   }
 }
 layer {
+  name: "norm1_t"
+  type: "LRN"
+  bottom: "pool1_t"
+  top: "norm1_t"
+  lrn_param {
+    local_size: 5
+    alpha: 0.001
+    beta: 0.5
+    norm_region: WITHIN_CHANNEL
+  }
+}
+layer {
   name: "conv2_t"
   type: "Convolution"
-  bottom: "pool1_t"
+  bottom: "norm1_t"
   top: "conv2_t"
   param {
     name: "conv2_w"
@@ -321,9 +333,21 @@ layer {
   }
 }
 layer {
+  name: "norm1_f"
+  type: "LRN"
+  bottom: "pool1_f"
+  top: "norm1_f"
+  lrn_param {
+    local_size: 5
+    alpha: 0.001
+    beta: 0.5
+    norm_region: WITHIN_CHANNEL
+  }
+}
+layer {
   name: "conv2_f"
   type: "Convolution"
-  bottom: "pool1_f"
+  bottom: "norm1_f"
   top: "conv2_f"
   param {
     name: "conv2_w"

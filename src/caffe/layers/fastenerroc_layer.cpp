@@ -28,8 +28,8 @@ template <typename Dtype>
 void FastenerRocLayer<Dtype>::Reshape(
   const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
   vector<int> top_shape(0);  // Accuracy is a scalar; 0 axes.
-  top[0]->Reshape(top_shape);
-  top[1]->Reshape(top_shape);
+  top[0]->Reshape(top_shape);   // AUC
+  top[1]->Reshape(top_shape);   // PD
 }
 
 // Computes ROC curve from a list of annotated scores (sorts scores)
@@ -101,9 +101,13 @@ void FastenerRocLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   CHECK_EQ(bottom.size(), 2*num_classes_ext_+1);
   std::vector<const Dtype*> bottom_data(2*num_classes_ext_);
   int batch_size = bottom[0]->shape(0);
+  CHECK_EQ(bottom[0]->shape(1), 2);   // Check number of channels
+  int image_height = bottom[0]->shape(2);
+  int image_width = bottom[0]->shape(3);
+  int image_size = image_height * image_width;
   for (int i = 0; i < 2*num_classes_ext_; ++i) {
     bottom_data[i] = bottom[i]->cpu_data();
-    CHECK_EQ(bottom[i]->count(), 2*batch_size);
+    CHECK_EQ(bottom[i]->count(), 2*batch_size*image_size);
   }
   const Dtype* bottom_label = bottom[2*num_classes_ext_]->cpu_data();
 
@@ -113,22 +117,38 @@ void FastenerRocLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     double maxScoreBroken = -std::numeric_limits<double>::max();
     if (label_value != eof_marker_) {
       CHECK_GE(label_value, -1);
-      CHECK_LT(label_value, num_classes_);
-      // Convention:  1 (positive) = missing or broken fastneer
+      CHECK_LT(label_value, 64);
+      // Original label convention:
+      //             -1 missing fastener
+      //          0..31 good fastener
+      //         32..63 broken fastener
+      // Convention:  1 (positive) = missing or broken fastnener
       //             -1 (negative) = good fastener
-      label_value = (label_value < 0 || (label_value >= num_good_ && label_value < num_classes_)) ?
-            1 : -1;
+      label_value = (label_value < 0 || label_value >= 0x20) ? 1 : -1;
+      //label_value = (label_value < 0 || (label_value >= num_good_ && label_value < num_classes_)) ?
+      //      1 : -1;
       for (int cl = 0; cl < num_classes_ext_; ++cl) {
-        double fastVsBg = bottom_data[cl][2*n+1] - bottom_data[cl][2*n];
-        double fastVsRest = bottom_data[cl+num_classes_ext_][2*n+1] - bottom_data[cl+num_classes_ext_][2*n];
+        const Dtype* fastVsBgPos = bottom_data[cl] + (2*n+1)*image_size;
+        const Dtype* fastVsBgNeg = bottom_data[cl] + (2*n)*image_size;
+        const Dtype* fastVsRestPos = bottom_data[cl+num_classes_ext_] + (2*n+1)*image_size;
+        const Dtype* fastVsRestNeg = bottom_data[cl+num_classes_ext_] + (2*n)*image_size;
+        //double fastVsBg = bottom_data[cl][2*n+1] - bottom_data[cl][2*n];
+        //double fastVsRest = bottom_data[cl+num_classes_ext_][2*n+1] - bottom_data[cl+num_classes_ext_][2*n];
         if (cl >= num_good_ && cl < num_classes_) {
           // Update broken score
-          maxScoreBroken = std::max(maxScoreBroken, fastVsRest);
+          for (int i = 0; i < image_size; ++i) {
+            const double fastVsRest = (fastVsRestPos[i] - fastVsRestNeg[i])/2;
+            maxScoreBroken = std::max(maxScoreBroken, fastVsRest);
+          }
         }
         else {
           // Update missing score
-          double penalty = std::min(fastVsRest, 0.);
-          maxScoreGood = std::max(maxScoreGood, fastVsBg + penalty);
+          for (int i = 0; i < image_size; ++i) {
+            const double fastVsBg = (fastVsBgPos[i] - fastVsBgNeg[i])/2;
+            const double fastVsRest = (fastVsRestPos[i] - fastVsRestNeg[i])/2;
+            const double penalty = std::min(fastVsRest, 0.);
+            maxScoreGood = std::max(maxScoreGood, fastVsBg + penalty);
+          }
         }
       }
       double score = std::min(maxScoreGood,-maxScoreBroken);

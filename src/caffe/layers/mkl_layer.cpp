@@ -43,11 +43,13 @@ void MklLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       << "Number of axes of bottom blob must be >=2.";
   MklParameter mkl_param = this->layer_param().mkl_param();
   int channels = bottom[0]->channels();
-  kernel_type_ = mkl_param.kernel_type();
-  CHECK_EQ(kernel_type_, MklParameter_KernelType_POLYNOMIAL)
-      << "Only POLYNOMIAL kernels are supported by Mkl layer";
-  neg_slope_ = mkl_param.neg_slope();
-  degree_ = mkl_param.degree();
+  // FIX ME:
+  //kernel_type_ = mkl_param.kernel_type();
+  //CHECK_EQ(kernel_type_, MklParameter_KernelType_POLYNOMIAL)
+  //    << "Only POLYNOMIAL kernels are supported by Mkl layer";
+  // FIX ME:
+  //neg_slope_ = mkl_param.neg_slope();
+  //degree_ = mkl_param.degree();
   CHECK(degree_ == 3 || degree_ == 5) 
       << "Only values 3 and 5 are supported for degree";
   channel_shared_ = mkl_param.channel_shared();

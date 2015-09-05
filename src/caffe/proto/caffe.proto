@@ -1221,16 +1221,30 @@ message MklParameter {
   // Multiple Kernel Learning paramters
   // Kernel types
   enum KernelType {
-    POLYNOMIAL = 0;
+    LINEAR = 1;
+    POLY2 = 2;
+    POLY3 = 3;
+    POLY4 = 4;
+    POLY5 = 5;
+    GAUSSIAN = 10;
+    TANH = 11;
+    NLINEAR = -1;
+    NPOLY2 = -2;
+    NPOLY3 = -3;
+    NPOLY4 = -4;
+    NPOLY5 = -5;
+    NGAUSSIAN = -10;
+    NTANH = -11;
   }
-  optional KernelType kernel_type = 1 [default = POLYNOMIAL];
-  // Degree (number of kernels). This includes the constant term of the
-  // polynomial kernel, so the default includes terms (1,x,x^2,x^3,x^4)
-  optional uint32 degree = 2 [default = 3];
-  // Whether or not kernel paramters are shared across channels.
-  optional bool channel_shared = 3 [default = false];
-  // Nominal slope for negative side
-  optional float neg_slope = 4 [default = 0.25];
+  // An array with the types of kernels to include
+  repeated KernelType kernel_type = 1;
+  // Initial weights for each kernel
+  repeated float kernel_weight = 2;
+  // Parameter of Gaussian kernel
+  optional float sigma = 3 [default = 1];
+  // Whether or not kernel parameters are shared across channels.
+  optional bool channel_shared = 4 [default = false];
+  // Dropout ratio
 }
 
 message FastenerRocParameter {
