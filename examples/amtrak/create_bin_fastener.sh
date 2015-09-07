@@ -10,7 +10,7 @@ DATA=data/amtrak
 BUILD=build/examples/amtrak
 NUMFILES=5
 BACKEND="lmdb"
-DOBUILDDB=0
+DOBUILDDB=1
 
 if [ ${DOBUILDDB} != 0 ]; then
 for SI in $SLIST; do
@@ -33,8 +33,8 @@ rm -rf $DBTRAIN
 rm -rf $DBTEST
 
 # Split
-$BUILD/convert_amtrak_data.bin $NUMFILES ${IMAGES} ${LABELS} ${NUMTRAIN[*]} $DBTRAIN --backend=${BACKEND}
-$BUILD/convert_amtrak_data.bin $NUMFILES ${IMAGES} ${LABELS} ${NUMTEST[*]} $DBTEST --backend=${BACKEND}
+$BUILD/convert_amtrak_balanced.bin $NUMFILES ${IMAGES} ${LABELS} ${NUMTRAIN[*]} $DBTRAIN --backend=${BACKEND}
+$BUILD/convert_amtrak_balanced.bin $NUMFILES ${IMAGES} ${LABELS} ${NUMTEST[*]} $DBTEST --backend=${BACKEND}
 
 done
 done
