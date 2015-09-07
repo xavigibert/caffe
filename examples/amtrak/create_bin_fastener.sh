@@ -642,7 +642,7 @@ layer {
   pooling_param {
     pool: MAX
     kernel_size: 3
-    stride: 2
+    stride: 1
   }
 }">>${EXAMPLE}/amtrak_tri_train_test.prototxt
 
@@ -702,6 +702,7 @@ done
 echo "  bottom: \"label_roc\"
   top: \"fastener_auc\"
   top: \"fastener_pd\"
+  top: \"fastener_th\"
   fastenerroc_param {
     desired_pfa: 0.01
   }
