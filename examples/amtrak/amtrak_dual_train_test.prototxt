@@ -13,7 +13,7 @@ layer {
     source_map: "data/amtrak/split3-images-idx3-ubyte"
     source_map: "data/amtrak/split4-images-idx3-ubyte"
     backend: LMDB_FILE
-    batch_size: 64
+    batch_size: 128
   }
   transform_param {
     scale: 0.00390625
@@ -61,7 +61,7 @@ layer {
     source_map: "data/amtrak/fast3-images-idx3-ubyte"
     source_map: "data/amtrak/fast4-images-idx3-ubyte"
     backend: LMDB_FILE
-    batch_size: 8
+    batch_size: 16
   }
   transform_param {
     scale: 0.00390625
