@@ -6,23 +6,23 @@ EXAMPLE=examples/amtrak
 DATA=data/amtrak
 BUILD=build/examples/amtrak
 NUMFILES=5
-NUMTRAIN=62500
+NUMTRAIN=60000
 NUMTEST=5000
 IMAGES="$DATA/fast0-images-idx3-ubyte $DATA/fast1-images-idx3-ubyte $DATA/fast2-images-idx3-ubyte $DATA/fast3-images-idx3-ubyte $DATA/fast4-images-idx3-ubyte"
 LABELS="$DATA/fast0-labels-idx1-ubyte $DATA/fast1-labels-idx1-ubyte $DATA/fast2-labels-idx1-ubyte $DATA/fast3-labels-idx1-ubyte $DATA/fast4-labels-idx1-ubyte"
 
 BACKEND="lmdb"
 
-DBTRAIN0=$EXAMPLE/db_fast_train0_${BACKEND}
-DBTEST0=$EXAMPLE/db_fast_test0_${BACKEND}
-DBTRAIN1=$EXAMPLE/db_fast_train1_${BACKEND}
-DBTEST1=$EXAMPLE/db_fast_test1_${BACKEND}
-DBTRAIN2=$EXAMPLE/db_fast_train2_${BACKEND}
-DBTEST2=$EXAMPLE/db_fast_test2_${BACKEND}
-DBTRAIN3=$EXAMPLE/db_fast_train3_${BACKEND}
-DBTEST3=$EXAMPLE/db_fast_test3_${BACKEND}
-DBTRAIN4=$EXAMPLE/db_fast_train4_${BACKEND}
-DBTEST4=$EXAMPLE/db_fast_test4_${BACKEND}
+DBTRAIN0=$DATA/db_fast_train0_${BACKEND}
+DBTEST0=$DATA/db_fast_test0_${BACKEND}
+DBTRAIN1=$DATA/db_fast_train1_${BACKEND}
+DBTEST1=$DATA/db_fast_test1_${BACKEND}
+DBTRAIN2=$DATA/db_fast_train2_${BACKEND}
+DBTEST2=$DATA/db_fast_test2_${BACKEND}
+DBTRAIN3=$DATA/db_fast_train3_${BACKEND}
+DBTEST3=$DATA/db_fast_test3_${BACKEND}
+DBTRAIN4=$DATA/db_fast_train4_${BACKEND}
+DBTEST4=$DATA/db_fast_test4_${BACKEND}
 
 echo "Creating ${BACKEND}..."
 
