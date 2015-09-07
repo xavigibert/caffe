@@ -783,7 +783,7 @@ class FastenerRocLayer : public Layer<Dtype> {
 
   virtual inline const char* type() const { return "FastenerRoc"; }
   virtual inline int MinBottomBlobs() const { return 2; }
-  virtual inline int ExactNumTopBlobs() const { return 2; }
+  virtual inline int ExactNumTopBlobs() const { return 3; }
 
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
@@ -805,6 +805,7 @@ class FastenerRocLayer : public Layer<Dtype> {
   double desired_pfa_;
   double auc_;
   double computed_pd_;
+  double computed_th_;
 
   std::vector<std::pair<double,int> > samples_;  // Vector of class/score pairs
 };

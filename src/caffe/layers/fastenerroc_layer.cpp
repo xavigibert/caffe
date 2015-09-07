@@ -20,8 +20,9 @@ void FastenerRocLayer<Dtype>::LayerSetUp(
   num_good_ = this->layer_param_.fastenerroc_param().num_good();
   eof_marker_ = this->layer_param_.fastenerroc_param().eof_marker();
   desired_pfa_ = this->layer_param_.fastenerroc_param().desired_pfa();
-  computed_pd_ = Dtype(0);
-  auc_ = Dtype(0);
+  computed_pd_ = 0.0;
+  computed_th_ = 0.0;
+  auc_ = 0.0;
 }
 
 template <typename Dtype>
@@ -30,6 +31,7 @@ void FastenerRocLayer<Dtype>::Reshape(
   vector<int> top_shape(0);  // Accuracy is a scalar; 0 axes.
   top[0]->Reshape(top_shape);   // AUC
   top[1]->Reshape(top_shape);   // PD
+  top[2]->Reshape(top_shape);   // Threshold
 }
 
 // Computes ROC curve from a list of annotated scores (sorts scores)
@@ -159,7 +161,7 @@ void FastenerRocLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       std::vector<double> pd, pfa;
       computeRocCurve(samples_, pd, pfa, auc_);
       //LOG(INFO) << "AUC = " << auc;
-      computeCfarTh(samples_, pd, pfa, desired_pfa_, computed_pd_);
+      computed_th_ = computeCfarTh(samples_, pd, pfa, desired_pfa_, computed_pd_);
       //LOG(INFO) << "PD(PFA=" << desired_pfa_ << ") = " << computed_pd_;
       // Save ROC curve
       std::ofstream f("roc_cnn.csv", std::ofstream::out);
@@ -177,6 +179,7 @@ void FastenerRocLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 
   top[0]->mutable_cpu_data()[0] = static_cast<Dtype>(auc_);
   top[1]->mutable_cpu_data()[0] = static_cast<Dtype>(computed_pd_);
+  top[2]->mutable_cpu_data()[0] = static_cast<Dtype>(computed_th_);
   // Accuracy layer should not be used as a loss function.
 }
 
